@@ -94,6 +94,46 @@ class EvaluationFunction(object):
         print("\033[1;34m\tSample's performance measure:\033[1;37m", value, "\033[0m")
         return value
 
+    def normalize_parameters(self, optimized_params):
+        """
+        Takes a dict of optimized parameters as given by the Map Matcher ecosystem and normalizes the values
+        to fit the Optimizer ecosystem.
+
+        This method uses the optimization_bounds member.
+        The process is inverse to the denormalization method and should be used on all parameters that 
+        come from the Map Matcher part of the system and are to be passed into the Optimizer.
+
+        :param optimized_params: The params dict, from the Map Matcher ecosystem
+        :returns: The normalized params dict where parameter values are in [0,1].
+        """
+        for rosparam_name, bounds in self.optimization_bounds.items():
+            old_val = optimized_params[rosparam_name] # TODO remove after test
+            param_range = bounds[1] - bounds[0]
+            optimized_params[rosparam_name] = (optimized_params[rosparam_name] - bounds[0]) / param_range
+            print("Normalizing", rosparam_name, "from", old_val, "to", optimized_params[rosparam_name]) # TODO remove after test
+
+        return optimized_params
+
+    def denormalize_parameters(self, optimized_params):
+        """
+        Takes a dict of optimized parameters as given by the Optimizer module and denormalizes the values
+        to fit the Map Matcher ecosystem.
+
+        The process is inverse to the normalization method and should be used on all parameters that 
+        come from the Optimizer module to be passed into the Map Matcher part of the system.
+        Also, the denormalized values are probably more informative for user output as well.
+
+        :param optimized_params: The params dict, from the Optimizer ecosystem (should be preprocessed before passed in here, see preprocess_optimized_params).
+        :returns: The denormalized params dict with the parameter values that actually should be used for map matcher evaluation.
+        """
+        for rosparam_name, bounds in self.optimization_bounds.items():
+            old_val = optimized_params[rosparam_name] # TODO remove after test
+            param_range = bounds[1] - bounds[0]
+            optimized_params[rosparam_name] = (optimized_params[rosparam_name] * param_range) + bounds[0]
+            print("Denormalizing", rosparam_name, "from", old_val, "to", optimized_params[rosparam_name]) # TODO remove after test
+
+        return optimized_params
+
     def preprocess_optimized_params(self, optimized_params):
         """
         Takes a dict of optimized parameters as given by the optimizer and preprocesses it to fit the ros ecosystem.
