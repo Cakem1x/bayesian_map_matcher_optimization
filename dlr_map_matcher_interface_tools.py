@@ -48,9 +48,9 @@ def _run_evaluation(command):
 ###########################################
 # Actual interface functions, those need to be implemented.
 #########################
-def create_evaluation_function_sample(toplevel_directory, sample, sample_generator_config):
+def create_objective_function_sample(toplevel_directory, sample, sample_generator_config):
     """
-    DLR-map-matcher-evaluation-specific code to get an evaluation_function Sample from a finished map matcher run.
+    DLR-map-matcher-evaluation-specific code to get an objective_function Sample from a finished map matcher run.
 
     :param toplevel_directory: The directory from which the Sample's can be generated.
     :param sample: Sample object which should be filled with data

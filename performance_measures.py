@@ -7,7 +7,7 @@
 
 """
 Classes for different ways to measure the map matcher's performance, based on information in a sample.
-Only classes that end with Measure (not *Function classes) take a Sample as __call__ parameter and are meant for immediate usage with evaluation_function.py.
+Only classes that end with Measure (not *Function classes) take a Sample as __call__ parameter and are meant for immediate usage with objective_function.py.
 """
 
 import numpy as np

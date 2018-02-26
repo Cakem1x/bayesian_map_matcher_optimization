@@ -5,7 +5,7 @@
 ##########################################################################
 
 # Local imports
-import evaluation_function
+import objective_function
 import performance_measures
 
 # Foreign packages
@@ -39,7 +39,7 @@ class ExperimentCoordinator(object):
     Another big part is code for plotting results.
 
     For the plotting and all user-interface-related manners, the parameters will be described by their "display_name", i.e. their key in the experiment's yaml file.
-    The code in the evaluation_function module doesn't know about the display_name and only uses the rosparam_name.
+    The code in the objective_function module doesn't know about the display_name and only uses the rosparam_name.
     """
 
     def __init__(self, params_dict, relpath_root):
@@ -76,16 +76,16 @@ class ExperimentCoordinator(object):
         ###########
         print("Setting up Sample database...")
         # Create the sample db
-        self.sample_db = evaluation_function.SampleDatabase(database_path, sample_directory_path, sample_generator_config)
+        self.sample_db = objective_function.SampleDatabase(database_path, sample_directory_path, sample_generator_config)
 
         ###########
         # Setup the evaluation function object
         ###########
-        print("Setting up EvaluationFunction...")
+        print("Setting up ObjectiveFunction...")
         self.optimization_defs = self._params['optimization_definitions']
         default_rosparams = rosparam.load_file(rosparams_path)[0][0]
         self.performance_measure = performance_measures.PerformanceMeasure.from_dict(self._params['performance_measure'])
-        self.eval_function = evaluation_function.EvaluationFunction(self.sample_db, default_rosparams,
+        self.eval_function = objective_function.ObjectiveFunction(self.sample_db, default_rosparams,
                                                                     self.opt_bounds,
                                                                     self.performance_measure,
                                                                     self._params['rounding_decimal_places'])
@@ -113,7 +113,7 @@ class ExperimentCoordinator(object):
 
         :param use_previous_observations: If this parameter is set to True, the optimizer will be initialized with all samples in the sample database that fit the current optimizer definitions.
         """
-        # Get the initialization samples from the EvaluationFunction
+        # Get the initialization samples from the ObjectiveFunction
         print("\tInitializing optimizer at", self._params['optimizer_initialization'])
         # init_dict will store the initialization data in the format the optimizer likes:
         # A list for each parameter with their values plus a 'target' list for the respective result value
@@ -581,7 +581,7 @@ class ExperimentCoordinator(object):
         """
         Saves a plot of the GPR estimate to disk.
         Visualizes the estimated function mean and 95% confidence area from the GPR.
-        Additionally shows the actual values for *all* available samples of the current EvaluationFunction.
+        Additionally shows the actual values for *all* available samples of the current ObjectiveFunction.
         """
 
         # Setup the figure and its axes
@@ -920,13 +920,13 @@ if __name__ == '__main__': # don't execute when module is imported
                               " See the other arguments' descriptions for different modes."
                              )
         rm_arg_help = ("Enters Remove Samples mode:"
-                       " Manually remove EvaluationFunction Samples from the database and from disk."
+                       " Manually remove ObjectiveFunction Samples from the database and from disk."
                        " (only the pickled Sample, not the map matcher results from which it was generated)"
                        " Samples can be identified via their hash or the pickle path."
                        " Exits after all supplied samples have been removed."
                       )
         add_arg_help = ("Enters Add Samples mode:"
-                        " Manually add EvaluationFunction Samples to the database."
+                        " Manually add ObjectiveFunction Samples to the database."
                         " Simply supply the paths to the directories from which INTERFACE_MODULE can create it."
                         " In this mode, existing Samples with the same pickle location on disk,"
                         " and existing entries in the database (same rosparams-hash) will be overwritten."
@@ -1138,7 +1138,7 @@ if __name__ == '__main__': # don't execute when module is imported
             if input() in ['y', 'Y', 'yes', 'Yes']:
                 for sample in patch_samples_list:
                     # Get the hash to find the unpatched sample in the db
-                    sample_hash = evaluation_function.SampleDatabase.rosparam_hash(sample.parameters)
+                    sample_hash = objective_function.SampleDatabase.rosparam_hash(sample.parameters)
                     # Patch the sample's parameters dict, casting the default value to the correct type
                     sample.parameters[args.new_param[0]] = new_param_type(args.new_param[1])
                     # Update the sample in the db (and its .pkl on disk)

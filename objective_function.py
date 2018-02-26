@@ -4,7 +4,7 @@
 ##########################################################################
 
 """
-Contains the code for modelling the EvaluationFunction via discrete samples.
+Contains the code for modelling the ObjectiveFunction via discrete samples.
 
 A Sample is defined by its full set of rosparams ("complete_rosparams"), since they're necessary to run
 the map matcher.
@@ -13,7 +13,7 @@ A Sample contains resulting data from the map matcher evaluation with its comple
 The Samples are managed by the SampleDatabase, which uses a hashing to quickly find the Sample for a given complete_rosparams set.
 If it doesn't exist, a new Sample will be generated using the INTERFACE_MODULE. (this is where you can define some method for generating Sample data for your specific map matcher implementation)
 
-The EvaluationFunction differentiates "complete_rosparams" and "optimized_rosparams".
+The ObjectiveFunction differentiates "complete_rosparams" and "optimized_rosparams".
 It acts as the interface for the optimizer, which only knows about the "optimized_rosparams" (subset of "complete_rosparams").
 """
 
@@ -26,7 +26,7 @@ from performance_measures import PerformanceMeasure
 import dlr_map_matcher_interface_tools
 INTERFACE_MODULE = dlr_map_matcher_interface_tools
 
-class EvaluationFunction(object):
+class ObjectiveFunction(object):
     """
     Models the evaluation function that is optimized by the gaussian process.
 
@@ -39,7 +39,7 @@ class EvaluationFunction(object):
 
     def __init__(self, sample_db, default_rosparams, optimization_bounds, performance_measure, rounding_decimal_places=0):
         """
-        Creates an EvaluationFunction object.
+        Creates an ObjectiveFunction object.
         
         :param sample_db: A sample database object.
         :param default_rosparams: A dict that contains all rosparams required for running the map matcher
@@ -201,7 +201,7 @@ class EvaluationFunction(object):
 
     def __iter__(self):
         """
-        Iterator for getting information from all available samples from the database, which define this EvaluationFunction.
+        Iterator for getting information from all available samples from the database, which define this ObjectiveFunction.
 
         This means only information from those Samples are yielded, which have parameter values matching the ones in default_rosparams.
         Only parameter values of currently optimized parameters are allowed to differ.
@@ -218,8 +218,8 @@ class EvaluationFunction(object):
 
     def _defined_by(self, complete_rosparams):
         """
-        Returns whether the given complete_rosparams is valid for defining this EvaluationFunction.
-        That's the case if all non-optimized parameters of complete_rosparams are equal to this EvaluationFunction's default_rosparams.
+        Returns whether the given complete_rosparams is valid for defining this ObjectiveFunction.
+        That's the case if all non-optimized parameters of complete_rosparams are equal to this ObjectiveFunction's default_rosparams.
         """
         nr_of_optimized_params_found = 0
         for param, value in complete_rosparams.items():
@@ -241,7 +241,7 @@ class Sample(object):
     """
     Represents one sample of the evaluation function.
     On the map matcher side, this is one run of the map matcher on the whole dataset.
-    It contains all available data, though only parts of it may be used by the EvaluationFunction that 
+    It contains all available data, though only parts of it may be used by the ObjectiveFunction that 
     is actually optimized.
     The data fields are as follows:
         * translation_errors: A list of translation errors meters per match
@@ -281,7 +281,7 @@ class Sample(object):
 class SampleDatabase(object):
     """
     This object manages Samples in a dictionary (the "database").
-    It knows nothing of the currently optimized parameters or their bounds, this functionality is covered by the EvaluationFunction.
+    It knows nothing of the currently optimized parameters or their bounds, this functionality is covered by the ObjectiveFunction.
     The sample object themselves aren't kept in memory, but are stored on disk as pickle files.
     They'll get loaded into when requested via __getitem__ like this: sample_db_obj[rosparams_of_requested_sample].
 
@@ -335,7 +335,7 @@ class SampleDatabase(object):
         sample = Sample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
-        INTERFACE_MODULE.create_evaluation_function_sample(results_path, sample, self.sample_generator_config)
+        INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self.sample_generator_config)
         # Calculate the path where the new sample's pickle file should be placed
         pickle_basename = os.path.basename(results_path)
         if pickle_basename == "results": # In some cases the results are placed in a dir called 'results'

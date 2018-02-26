@@ -13,8 +13,8 @@ Python3 should be installable with your favourite package manager.
 All other dependencies can be installed via a python package manager, e.g. with pip install [pkg-name].
 
 Setup:
-To optimize the parameters of your specific system, you need to implement the `create_evaluation_function_sample` function.
-The file in which you define this function needs to be set in the `evaluation_function.py` as `INTERFACE_MODULE` variable.
+To optimize the parameters of your specific system, you need to implement the `create_objective_function_sample` function.
+The file in which you define this function needs to be set in the `objective_function.py` as `INTERFACE_MODULE` variable.
 The Bayesian Map Matcher Optimizer calls this function whenever it wants to make a new observation (i.e. create a new sample).
 The implementation for the map matcher of DLR RM can be used as a reference of what it could do. Have a look at the file `dlr_map_matcher_interface_tools.py`.
 
