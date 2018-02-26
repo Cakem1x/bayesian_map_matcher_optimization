@@ -55,6 +55,8 @@ def create_objective_function_sample(toplevel_directory, sample, sample_generato
     :param toplevel_directory: The directory from which the Sample's can be generated.
     :param sample: Sample object which should be filled with data
     :param sample_generator_config: An arbitrary dictionary with additional parameters for the sample generation process. Will get copied from the respective experiment yaml file's field.
+    
+    Returns the params_dict with which this sample was generated.
     """
     sample.origin = toplevel_directory
     sample.translation_errors = []
@@ -96,8 +98,7 @@ def create_objective_function_sample(toplevel_directory, sample, sample_generato
             if file_name == "params.yaml":
                 # As soon as one params.yaml is found somewhere, we're done.
                 # (because all other dirs have exactly the same parameters)
-                sample.parameters = rosparam.load_file(os.path.join(root, file_name))[0][0]
-                return
+                return rosparam.load_file(os.path.join(root, file_name))[0][0]
 
 def generate_sample(rosparams, sample_generator_config):
     """
@@ -117,7 +118,7 @@ def generate_sample(rosparams, sample_generator_config):
     results_path = os.path.join(env_dir, "results") # Path for map matcher's output
     yaml_path = os.path.join(env_dir, "evaluation.yaml") # Path for map matcher's config
     rosparams_path = os.path.join(env_dir, "params.yaml") # Path for the rosparams
-    eval_log_path = os.path.join(env_dir, "evaluation.log") # Path for the rosparams
+    eval_log_path = os.path.join(env_dir, "evaluation.log") # Path for the evaluation log
     # Add the paths to the config, so the map_matcher_evaluation script finds it
     sample_generator_config['parameters'] = rosparams_path
     sample_generator_config['results'] = results_path
