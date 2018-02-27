@@ -276,7 +276,7 @@ class MapMatcherSampleSource(object):
         :param config: Config for the sample generation in the MAP_MATCHER_INTERFACE_MODULE.
         """
         assert(not MAP_MATCHER_INTERFACE_MODULE is None) # This class requires you to set the MAP_MATCHER_INTERFACE_MODULE (see class docstring).
-        self._config = config
+        self.config = config
 
     def __getitem__(self, params_dict):
         """
@@ -285,7 +285,7 @@ class MapMatcherSampleSource(object):
         :param params_dict: A dictionary of parameters of the requested sample.
         """
         # This call will lock until the map matcher evaluation is finished
-        results_path = MAP_MATCHER_INTERFACE_MODULE.generate_sample(params_dict, self._config)
+        results_path = MAP_MATCHER_INTERFACE_MODULE.generate_sample(params_dict, self.config)
         generated_sample_params_dict, generated_sample = self.create_sample_from_map_matcher_results(results_path)
         # Check if the parameters were conveyed correctly
         if not generated_sample_params_dict == params_dict:
@@ -312,7 +312,7 @@ class MapMatcherSampleSource(object):
         sample = samples.MapMatcherSample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
-        params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self._config)
+        params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self.config)
         # Calculate a name for the sample
         sample.name = os.path.basename(results_path)
         if sample.name == "results": # In some cases the results are placed in a dir called 'results'
