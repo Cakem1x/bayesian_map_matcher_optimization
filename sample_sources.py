@@ -9,9 +9,9 @@ import os
 import pickle
 
 import samples
-# import the DLR specific code to generae data with the DLR map matcher
-import dlr_map_matcher_interface_tools
-MAP_MATCHER_INTERFACE_MODULE = dlr_map_matcher_interface_tools
+# import your map matcher specific interface implementation here
+#import dlr_map_matcher_interface_tools
+MAP_MATCHER_INTERFACE_MODULE = None # dlr_map_matcher_interface_tools
 
 
 """
@@ -222,14 +222,24 @@ class MapMatcherSampleSource(object):
     """
     The MapMatcherSampleSource generates MapMatcherSamples by using an external map matcher pipeline.
     This class calls the external map matcher pipeline by using two methods defined in MAP_MATCHER_INTERFACE_MODULE:
-        * create_objective_function_sample
-        * generate_sample
+        * generate_sample(params_dict, config:
+            This method is called whenever a new evaluation process needs to get started.
+            :param params_dict: Contains all parameters for the map matcher, to which the sample is sensitive.
+            :param config: Other parameters can be transmitted via the this argument. However, changing values in config 
+                           shouldn't affect the evaluation result!
+        * create_objective_function_sample(dir, sample, config):
+            This method is called when the results of the map matcher evalaution are already available.
+            It is used to process the evaluation data and populate the given sample object with that data.
+            :param dir: Path to where the results lie. Those results can be whatever is convenient for your map matcher implementation.
+            :param sample: The sample that should get populated with the evaluation result.
+            :param config: Config for your MAP_MATCHER_INTERFACE_MODULE implementation.
     """
     def __init__(self, config):
         """
         Initializes the MapMatcherSampleSource.
         :param config: Config for the sample generation in the MAP_MATCHER_INTERFACE_MODULE.
         """
+        assert(not MAP_MATCHER_INTERFACE_MODULE is None) # This class requires you to set the MAP_MATCHER_INTERFACE_MODULE (see class docstring).
         self._config = config
 
     def __getitem__(self, params_dict):
@@ -258,7 +268,7 @@ class MapMatcherSampleSource(object):
         sample = MapMatcherSample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
-        params_dict = INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self._config)
+        params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self._config)
         # Calculate a name for the sample
         sample.name = os.path.basename(results_path)
         if sample.name == "results": # In some cases the results are placed in a dir called 'results'
