@@ -29,6 +29,26 @@ This way, samples won't be generated twice, for example if you rerun your experi
 Additionally, SampleDatabase supplies methods to iterate over all generated samples, which can useful for visualization purposes.
 """
 
+class SampleSource(object):
+    """
+    Baseclass implementation of a SampleSource.
+    Each SampleSource has __getitem__ as its main interface.
+    Additionally, the sample_type property is used to define what kind of samples this sample source supplies.
+
+    Overwrite those methods in your specific implementation.
+    """
+    def __init__(self):
+        raise RuntimeError("This is only used as a baseclass to use for type checks. You shouldn't actually try to use this class.")
+
+    def __getitem__(self):
+        pass
+
+    @property
+    def sample_type(self):
+        """
+        The type of the samples that are supplied by this sample source.
+        """
+        return None
 
 class SampleDatabase(object):
     """
@@ -76,6 +96,41 @@ class SampleDatabase(object):
             self._db_dict = {} # ..otherwise initialize as an empty dict and save it
             self._save()
 
+    def __getitem__(self, params_dict):
+        """
+        Main interface method of this class.
+        Returns the sample corresponding to the given params_dict.
+        Either from the dictionary, if a sample was already generated with those parameters.
+        Otherwise, if the requested sample doesn't exist in the db, it'll get generated via the sample_generator member.
+        This causes the function call to block until it's done. (possibly for hours)
+
+        :param params_dict: The parameters dictionary that defines the requested sample.
+        """
+
+        params_hashed = SampleDatabase.dict_hash(params_dict)
+        if not self.exists(params_dict): # Check whether the sample needs to get generated
+            # Generate a new sample and store it in the database
+            print("\tNo sample with hash ", params_hashed, " in database, forwarding request to my sample_generator.")
+            generated_sample = self.sample_generator[params_dict]
+            print("\tSample generation finished, adding it to database.")
+            self.add_sample(generated_sample)
+        # Get the sample's db entry
+        db_entry = self._db_dict[params_hashed]
+        # load the Sample from disk
+        print("\tRetrieving sample ", db_entry['pickle_name'], "(hash: ", params_hashed, ") from db.", sep="'")
+        extracted_sample = self._unpickle_sample(db_entry['pickle_name'])
+        # Do a sanity check of the parameters, just in case of a hash collision
+        if not params_dict == db_entry['params_dict']:
+            raise LookupError("Got a sample with hash " + params_hashed + ", but its parameters didn't match the requested parameters. (Hash function collision?)", params_dict, db_entry['params_dict'])
+        return extracted_sample
+
+    @property
+    def sample_type(self):
+        """
+        Since the database doesn't create samples itself, this method conveys the sample_type of its sample_generator.
+        """
+        return self.sample_generator.sample_type
+
     def _save(self):
         """
         Pickles the current state of the database dict.
@@ -102,34 +157,6 @@ class SampleDatabase(object):
         for sample in self._db_dict.values():
             yield self._unpickle_sample(sample['pickle_name'])
 
-    def __getitem__(self, params_dict):
-        """
-        Main interface method of this class.
-        Returns the sample corresponding to the given params_dict.
-        Either from the dictionary, if a sample was already generated with those parameters.
-        Otherwise, if the requested sample doesn't exist in the db, it'll get generated via the sample_generator member.
-        This causes the function call to block until it's done. (possibly for hours)
-
-        :param params_dict: The parameters dictionary that defines the requested sample.
-        """
-
-        params_hashed = SampleDatabase.dict_hash(params_dict)
-        if not self.exists(params_dict): # Check whether the sample needs to get generated
-            # Generate a new sample and store it in the database
-            print("\tNo sample with hash ", params_hashed, " in database, forwarding request to my sample_generator.")
-            generated_sample = self.sample_generator[params_dict]
-            print("\tSample generation finished, adding it to database.")
-            self.add_sample(generated_sample)
-        # Get the sample's db entry
-        db_entry = self._db_dict[params_hashed]
-        # load the Sample from disk
-        print("\tRetrieving sample ", db_entry['pickle_name'], "(hash: ", params_hashed, ") from db.", sep="'")
-        extracted_sample = self._unpickle_sample(pickle_name)
-        # Do a sanity check of the parameters, just in case of a hash collision
-        if not params_dict == db_entry['params_dict']:
-            raise LookupError("Got a sample with hash " + params_hashed + ", but its parameters didn't match the requested parameters. (Hash function collision?)", params_dict, db_entry['params_dict'])
-        return extracted_sample
-
     def _pickle_sample(self, sample, pickle_name, override_existing=False):
         """
         Helper method for saving samples to disk.
@@ -154,8 +181,9 @@ class SampleDatabase(object):
         pickle_path = os.path.abspath(os.path.join(self.sample_dir_path, pickle_name, ".pkl"))
         with open(pickle_path, 'rb') as sample_pickle_handle:
             sample = pickle.load(sample_pickle_handle)
-            if not isinstance(sample, Sample):
-                raise TypeError("The object unpickled from", pickle_path, "isn't an Sample instance!")
+            if not isinstance(sample, self.sample_type):
+                raise TypeError("The object unpickled from", pickle_path, "has the wrong type!",
+                                "Is:", type(sample), "should be:", self.sample_type)
             return sample
 
     def add_sample(self, sample, params_dict, override_existing=False):
@@ -198,8 +226,8 @@ class SampleDatabase(object):
         else:
             print("\tRemoving Sample's pickle '" + pickle_path + "' from disk.")
             os.remove(pickle_path)
-        print("\tRemoving Sample's db entry '" + str(sample_hash) + "'.")
-        del self._db_dict[sample_hash]
+        print("\tRemoving Sample's db entry '" + str(params_hashed) + "'.")
+        del self._db_dict[params_hashed]
             
         # Only save the db at the end, after we know everything worked
         self._save()
@@ -256,6 +284,13 @@ class MapMatcherSampleSource(object):
             raise RuntimeError("Sample requested with parameters", params_dict, "ended up being generated with parameters", generated_sample_params_dict, "!")
         return generated_sample
 
+    @property
+    def sample_type(self):
+        """
+        The MapMatcherSampleSource supplies MapMatcherSamples.
+        """
+        return samples.MapMatcherSample
+
     def create_sample_from_map_matcher_results(self, results_path, override_existing=False):
         """
         Creates a new Sample object from a finished map matcher run and adds it to the database.
@@ -266,7 +301,7 @@ class MapMatcherSampleSource(object):
 
         results_path = os.path.abspath(results_path)
         print("\tCreating new Sample from map matcher result at", results_path, end=".\n")
-        sample = MapMatcherSample()
+        sample = samples.MapMatcherSample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
         params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self._config)
