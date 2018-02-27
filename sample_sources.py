@@ -157,6 +157,15 @@ class SampleDatabase(object):
         for sample in self._db_dict.values():
             yield self._unpickle_sample(sample['pickle_name'])
 
+    def _to_pickle_path(self, pickle_name):
+        """
+        Returns the pickle_path for a sample's pickled representation, identified by its pickle_name.
+        """
+        if pickle_name is None:
+            raise ValueError("pickle_name should never be None!")
+        pickle_path = os.path.abspath(os.path.join(self.sample_dir_path, pickle_name + ".pkl"))
+        return pickle_path
+
     def _pickle_sample(self, sample, pickle_name, override_existing=False):
         """
         Helper method for saving samples to disk.
@@ -164,7 +173,7 @@ class SampleDatabase(object):
         :param sample: The Sample which should be pickled.
         :param pickle_name: The name of the Sample's pickled representation.
         """
-        pickle_path = os.path.abspath(os.path.join(self.sample_dir_path, pickle_name, ".pkl"))
+        pickle_path = self._to_pickle_path(pickle_name)
         # Safety check, don't just overwrite other pickles!
         if not override_existing and os.path.exists(pickle_path):
             raise ValueError("A pickle file already exists at the calculated location:", pickle_path)
@@ -178,7 +187,7 @@ class SampleDatabase(object):
 
         :param pickle_name: Path to the Sample's pickled representation.
         """
-        pickle_path = os.path.abspath(os.path.join(self.sample_dir_path, pickle_name, ".pkl"))
+        pickle_path = self._to_pickle_path(pickle_name)
         with open(pickle_path, 'rb') as sample_pickle_handle:
             sample = pickle.load(sample_pickle_handle)
             if not isinstance(sample, self.sample_type):
@@ -218,8 +227,7 @@ class SampleDatabase(object):
         if not params_hashed in self._db_dict:
             raise LookupError("Couldn't find a sample with hash", params_hashed)
         # Get sample from pickled representation
-        pickle_name = self._db_dict[params_hashed]['pickle_name']
-        pickle_path = os.path.join(self.sample_dir_path, pickle_name, ".pkl")
+        pickle_path = self._to_pickle_path(self._db_dict[params_hashed]['pickle_name'])
         if not os.path.isfile(pickle_path):
             print("\tWarning: Couldn't find Sample's pickled representation at '" +\
                   pickle_path + "'.")
