@@ -114,7 +114,7 @@ class SampleDatabase(SampleSource):
             print("\tNo sample with hash ", params_hashed, " in database, forwarding request to my sample_generator.")
             generated_sample = self.sample_generator[params_dict]
             print("\tSample generation finished, adding it to database.")
-            self.add_sample(generated_sample)
+            self.add_sample(generated_sample, params_dict)
         # Get the sample's db entry
         db_entry = self._db_dict[params_hashed]
         # load the Sample from disk
