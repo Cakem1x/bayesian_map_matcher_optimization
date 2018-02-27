@@ -7,6 +7,7 @@
 
 import os
 import pickle
+import numpy as np
 
 import samples
 # import your map matcher specific interface implementation here
@@ -50,7 +51,7 @@ class SampleSource(object):
         """
         return None
 
-class SampleDatabase(object):
+class SampleDatabase(SampleSource):
     """
     The SampleDatabase class can be used as an intermediate module between objective function and an actual sample source.
     This class will only work while the PYTHONHASHSEED remains the same. To enforce this, set this env variable to a fixed value before starting your script.
@@ -254,7 +255,7 @@ class SampleDatabase(object):
         return hash(frozenset(params_dict.items()))
 
 
-class MapMatcherSampleSource(object):
+class MapMatcherSampleSource(SampleSource):
     """
     The MapMatcherSampleSource generates MapMatcherSamples by using an external map matcher pipeline.
     This class calls the external map matcher pipeline by using two methods defined in MAP_MATCHER_INTERFACE_MODULE:
@@ -319,3 +320,34 @@ class MapMatcherSampleSource(object):
             # If that's the case, we'll use the name of the directory above, since 'results' is a bad name & probably not unique
             sample.name = os.path.basename(os.path.dirname(results_path))
         return params_dict, sample
+
+class FakeMapMatcherSampleSource(SampleSource):
+    """
+    Generates fake MapMatcherSamples.
+    Instead of actually running an evaluation process, it determines the sample's contents with the following functions:
+    number_of_matches: (x1-x2)*sin(x1)
+    translation errors: [x1^2 + (2*x2-10)^2]; For all elements
+    rotation errors: [0, ... , 0]; Translation errors should suffice for testing
+    duration: always 0, since currently not used
+    """
+    def __init__(self):
+        print("Creating FAKE(!) MapMatcherSampleSource. Take care not to put those samples into your real sample database!")
+
+    def __getitem__(self, params_dict):
+        x1 = params_dict['x1']
+        x2 = params_dict['x2']
+        sample = samples.MapMatcherSample()
+        translation_error = np.float_power(x1, 2) + np.float_power(2 * x2 - 10, 2)
+        nr_matches = int(round(abs((x1-x2)*np.sin(x1))))
+        print("nr_matches of new fake sample:", nr_matches)
+        print("error of new fake sample:", translation_error)
+        sample.translation_errors = [translation_error] * nr_matches
+        sample.rotation_errors = [0] * nr_matches
+        return sample
+
+    @property
+    def sample_type(self):
+        """
+        The MapMatcherSampleSource supplies MapMatcherSamples.
+        """
+        return samples.MapMatcherSample
