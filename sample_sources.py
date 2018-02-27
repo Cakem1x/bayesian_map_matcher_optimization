@@ -47,13 +47,13 @@ class SampleDatabase(object):
         * params_dict: The complete rosparams dict used to generate this Sample. Its hash should be equal to the item's key.
     """
 
-    def __init__(self, database_path, sample_dir_path, sample_source):
+    def __init__(self, database_path, sample_dir_path, sample_generator):
         """
         Initializes the SampleDatabase object.
 
         :param database_path: Path to the database file (the pickled database dict).
         :param sample_dir_path: Path to the directory where samples created by this SampleDatabase should be stored.
-        :param sample_source: Sample source object, which generates new samples via its __getitem__(params_dict) method.
+        :param sample_generator: Sample source object that generates new samples via its __getitem__(params_dict) method.
         """
         # Error checking
         if os.path.isdir(database_path):
@@ -63,7 +63,7 @@ class SampleDatabase(object):
 
         self._database_path = database_path
         self.sample_dir_path = sample_dir_path
-        self.sample_source = sample_source
+        self.sample_generator = sample_generator
 
         if os.path.exists(self._database_path): # If file exists...
             print("\tFound existing datapase pickle, loading from:", self._database_path, end=" ")
@@ -107,7 +107,7 @@ class SampleDatabase(object):
         Main interface method of this class.
         Returns the sample corresponding to the given params_dict.
         Either from the dictionary, if a sample was already generated with those parameters.
-        Otherwise, if the requested sample doesn't exist in the db, it'll get generated via the sample_source member.
+        Otherwise, if the requested sample doesn't exist in the db, it'll get generated via the sample_generator member.
         This causes the function call to block until it's done. (possibly for hours)
 
         :param params_dict: The parameters dictionary that defines the requested sample.
@@ -116,8 +116,8 @@ class SampleDatabase(object):
         params_hashed = SampleDatabase.dict_hash(params_dict)
         if not self.exists(params_dict): # Check whether the sample needs to get generated
             # Generate a new sample and store it in the database
-            print("\tNo sample with hash ", params_hashed, " in database, forwarding request to my sample_source.")
-            generated_sample = self.sample_source[params_dict]
+            print("\tNo sample with hash ", params_hashed, " in database, forwarding request to my sample_generator.")
+            generated_sample = self.sample_generator[params_dict]
             print("\tSample generation finished, adding it to database.")
             self.add_sample(generated_sample)
         # Get the sample's db entry
@@ -261,6 +261,7 @@ class MapMatcherSampleSource(object):
         Creates a new Sample object from a finished map matcher run and adds it to the database.
 
         :param results_path: The path to the directory which contains the map matcher's results.
+        :return: Tuple with the params_dict of the added sample (determined by the MAP_MATCHER_INTERFACE_MODULE) and the sample itself.
         """
 
         results_path = os.path.abspath(results_path)

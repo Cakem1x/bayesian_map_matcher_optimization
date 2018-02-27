@@ -6,6 +6,7 @@
 
 # Local imports
 import objective_function
+import sample_sources
 import performance_measures
 
 # Foreign packages
@@ -65,7 +66,7 @@ class ExperimentCoordinator(object):
         self._params['plots_directory'] = self._resolve_relative_path(self._params['plots_directory'])
         database_path = self._resolve_relative_path(self._params['database_path'])
         sample_directory_path = self._resolve_relative_path(self._params['sample_directory'])
-        rosparams_path = self._resolve_relative_path(self._params['default_rosparams_yaml_path'])
+        rosparams_path = self._resolve_relative_path(self._params['default_params_yaml_path'])
         sample_generator_config = self._params['sample_generator_config']
         sample_generator_config['evaluator_executable'] = self._resolve_relative_path(sample_generator_config['evaluator_executable'])
         sample_generator_config['environment'] = self._resolve_relative_path(sample_generator_config['environment'])
@@ -74,28 +75,29 @@ class ExperimentCoordinator(object):
         ###########
         # Setup the SampleDatabase object
         ###########
-        print("Setting up Sample database...")
-        # Create the sample db
-        self.sample_db = objective_function.SampleDatabase(database_path, sample_directory_path, sample_generator_config)
+        print("Setting up sample source...")
+        print("\t --> Creating map matcher sample source.")
+        map_matcher_sample_source = sample_sources.MapMatcherSampleSource(sample_generator_config)
+        print("\t --> Creating SampleDatabase using the map matcher sample source.")
+        self.sample_db = sample_sources.SampleDatabase(database_path, sample_directory_path, map_matcher_sample_source)
 
         ###########
         # Setup the evaluation function object
         ###########
-        print("Setting up ObjectiveFunction...")
         self.optimization_defs = self._params['optimization_definitions']
-        default_rosparams = rosparam.load_file(rosparams_path)[0][0]
+        default_params = rosparam.load_file(rosparams_path)[0][0]
         self.performance_measure = performance_measures.PerformanceMeasure.from_dict(self._params['performance_measure'])
-        self.eval_function = objective_function.ObjectiveFunction(self.sample_db, default_rosparams,
-                                                                    self.opt_bounds,
-                                                                    self.performance_measure,
-                                                                    self._params['rounding_decimal_places'])
+        self.obj_function = objective_function.ObjectiveFunction(self.sample_db, self.performance_measure,
+                                                                 default_params, self.opt_bounds,
+                                                                 self._params['rounding_decimal_places'],
+                                                                 normalization=False) # TODO: Implement normalization
         ###########
         # Create an BayesianOptimization object, that contains the GPR logic.
         # Will supply us with new param-samples and will try to model the map matcher metric function.
         ###########
         print("Setting up Optimizer...")
         # Create the optimizer object
-        self.optimizer = BayesianOptimization(self.eval_function.evaluate, self.opt_bounds, verbose=0)
+        self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds, verbose=0)
         # Create a kwargs member for passing to the maximize method (see iterate())
         # Those parameters will be passed to the GPR member of the optimizer
         gpr_params = {'alpha': 1e-10, 'matern_nu': 2.5} # set default parameters
@@ -125,7 +127,7 @@ class ExperimentCoordinator(object):
         # If desired, previously generated observations will be used as initialization as well.
         if use_previous_observations:
             print("\tUsing previous observations to initialize the optimizer.")
-            for sample_complete_rosparams, y, s in self.eval_function: # gets the params dict of each sample
+            for sample_complete_rosparams, y, s in self.obj_function: # gets the params dict of each sample
                 if y > 0 or not only_nonzero_observations:
                     # only get values of optimized params; requires at least one initialization value defined in the experiment.yaml, but that should be the case anyway.
                     for optimized_rosparam in self._params['optimizer_initialization'][0].keys():
@@ -140,7 +142,7 @@ class ExperimentCoordinator(object):
         :param axis: The axis object that needs to be set up
         :param param_display_name: The display name of the parameter, as given in the experiment's yaml file.
         """
-        axis.set_xlim(self.eval_function.optimization_bounds[self._to_rosparam(param_display_name)])
+        axis.set_xlim(self.obj_function.design_space[self._to_rosparam(param_display_name)])
         axis.set_ylim(self.performance_measure.value_range)
         axis.set_xlabel(param_display_name)
         axis.set_ylabel(str(self.performance_measure))
@@ -425,17 +427,17 @@ class ExperimentCoordinator(object):
         """
         Saves a plot to visualize the parameter space along a line.
         The line varies along the param_name dimension of the parameter space.
-        All other parameters are set to the value from the default_rosparams dict.
+        All other parameters are set to the value from the default_params dict.
         The plot shows the performance measure's behaviour and the samples' data.
         Convenience wrapper around _samples_plot, see its doc for further details.
         """
         # Get sampels, using the eval function
         x_axis = []
         samples = []
-        fixed_params = self.eval_function.default_rosparams.copy()
+        fixed_params = self.obj_function.default_params.copy()
         value_range_list = [round(float(v), 2) for v in value_range_list]
         del(fixed_params[self._to_rosparam(param_name)])
-        for params_dict, metric_value, sample in self.eval_function.samples_filtered(fixed_params):
+        for params_dict, metric_value, sample in self.obj_function.samples_filtered(fixed_params):
             if value_range_list == [] or round(float(params_dict[self._to_rosparam(param_name)]), 2) in value_range_list:
                 x_axis.append(params_dict[self._to_rosparam(param_name)])
                 samples.append(sample)
@@ -466,9 +468,9 @@ class ExperimentCoordinator(object):
         RESOLUTION = 50 # determines the plots' RESOLUTION, i.e. how many values per dimension get sampled the GP
         OFFSET = 0.01 # offsets the x-, y-axes, so markers at the edge are visible
         # Prepare x and y data (the same for all plots)
-        x_bounds = self.eval_function.optimization_bounds[self._to_rosparam(param_names[0])]
+        x_bounds = self.obj_function.design_space[self._to_rosparam(param_names[0])]
         x = np.linspace(x_bounds[0] - OFFSET, x_bounds[1] + OFFSET, RESOLUTION)
-        y_bounds = self.eval_function.optimization_bounds[self._to_rosparam(param_names[1])]
+        y_bounds = self.obj_function.design_space[self._to_rosparam(param_names[1])]
         y = np.linspace(y_bounds[0] - OFFSET, y_bounds[1] + OFFSET, RESOLUTION)
         value_range = self.performance_measure.value_range
         # Set labels for all axes
@@ -560,8 +562,8 @@ class ExperimentCoordinator(object):
         # Add legend
         ax_3d.legend(loc='upper right')
         # set limits
-        ax_3d.set_xlim(self.eval_function.optimization_bounds[self._to_rosparam(param_names[0])])
-        ax_3d.set_ylim(self.eval_function.optimization_bounds[self._to_rosparam(param_names[1])])
+        ax_3d.set_xlim(self.obj_function.design_space[self._to_rosparam(param_names[0])])
+        ax_3d.set_ylim(self.obj_function.design_space[self._to_rosparam(param_names[1])])
         ax_3d.set_zlim=(self.performance_measure.value_range)
         # set labels
         ax_3d.set_xlabel(param_names[0])
@@ -607,9 +609,9 @@ class ExperimentCoordinator(object):
         samples_x = []
         samples_y = []
         # Gather available x, y pairs in the above two variables
-        fixed_params = self.eval_function.default_rosparams.copy()
+        fixed_params = self.obj_function.default_params.copy()
         del(fixed_params[self._to_rosparam(param_name)])
-        for params_dict, metric_value, sample in self.eval_function.samples_filtered(fixed_params):
+        for params_dict, metric_value, sample in self.obj_function.samples_filtered(fixed_params):
             samples_x.append(params_dict[self._to_rosparam(param_name)])
             samples_y.append(metric_value)
         metric_axis.scatter(samples_x, samples_y, c=colors['red'], label=u"All Observations $D_*$")
@@ -631,9 +633,9 @@ class ExperimentCoordinator(object):
         """
         predictionspace = np.zeros((len(self.optimizer.keys), np.power(RESOLUTION, len(free_params))))
         for key in [fixed_param for fixed_param in self.optimization_defs.keys() if fixed_param not in free_params]: # Fill all fixed params with the default value
-            predictionspace[self._to_optimizer_id(key)] = np.full((1,np.power(RESOLUTION, len(free_params))), self.eval_function.default_rosparams[self._to_rosparam(key)])
+            predictionspace[self._to_optimizer_id(key)] = np.full((1,np.power(RESOLUTION, len(free_params))), self.obj_function.default_params[self._to_rosparam(key)])
         # Handle free params
-        free_param_bounds = [self.eval_function.optimization_bounds[self._to_rosparam(key)] for key in free_params]
+        free_param_bounds = [self.obj_function.design_space[self._to_rosparam(key)] for key in free_params]
         free_param_spaces = [np.linspace(bounds[0], bounds[1], RESOLUTION) for bounds in free_param_bounds]
         free_param_coordinates = np.meshgrid(*free_param_spaces)
         for i, key in enumerate(free_params):
@@ -654,11 +656,11 @@ class ExperimentCoordinator(object):
         samples_y = []
         samples_z = []
         # Gather available x, y pairs in the above two variables
-        fixed_params = self.eval_function.default_rosparams.copy()
+        fixed_params = self.obj_function.default_params.copy()
         # delete the free parameters from it
         del(fixed_params[self._to_rosparam(free_params_display_names[0])])
         del(fixed_params[self._to_rosparam(free_params_display_names[1])])
-        for params_dict, metric_value, sample in self.eval_function.samples_filtered(fixed_params):
+        for params_dict, metric_value, sample in self.obj_function.samples_filtered(fixed_params):
             samples_x.append(params_dict[self._to_rosparam(free_params_display_names[0])])
             samples_y.append(params_dict[self._to_rosparam(free_params_display_names[1])])
             samples_z.append(metric_value)
@@ -671,7 +673,7 @@ class ExperimentCoordinator(object):
             # For each sample, check if it's usable:
             usable = True
             for fixed_param in fixed_params_display_names:
-                if not self.eval_function.default_rosparams[self._to_rosparam(fixed_param)] == x[self._to_optimizer_id(fixed_param)]:
+                if not self.obj_function.default_params[self._to_rosparam(fixed_param)] == x[self._to_optimizer_id(fixed_param)]:
                     usable = False
                     break
             if usable:
@@ -746,7 +748,7 @@ class ExperimentCoordinator(object):
             
             self.handle_new_best_parameters()
             # reset optimizer
-            self.optimizer = BayesianOptimization(self.eval_function.evaluate, self.opt_bounds, verbose=0)
+            self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds, verbose=0)
 
     def iterate(self):
         """
@@ -880,7 +882,7 @@ class ExperimentCoordinator(object):
         """
         Returns the sample of the default parameterset.
         """
-        return self.sample_db[self.eval_function.default_rosparams]
+        return self.sample_db[self.obj_function.default_params]
 
     @property
     def max_sample(self):
@@ -896,11 +898,11 @@ class ExperimentCoordinator(object):
         Of course, only optimized parameters will potentially be different from the inital param set.
         """
         # Get the default parameter values, including those which didn't get optimized
-        best_rosparams = self.eval_function.default_rosparams.copy()
+        best_rosparams = self.obj_function.default_params.copy()
         # Get the best known optimized parameters as a dict from the optimizer
         best_optimized_params = self.optimizer.res['max']['max_params'].copy()
         # Fix parameter types and round its values
-        self.eval_function.preprocess_optimized_params(best_optimized_params)
+        self.obj_function.preprocess_optimized_params(best_optimized_params)
         # Update the default params dict with optimized params dict
         best_rosparams.update(best_optimized_params)
         return best_rosparams
@@ -1049,12 +1051,12 @@ if __name__ == '__main__': # don't execute when module is imported
             print("--> Mode: List All Samples <--")
             for sample in experiment_coordinator.sample_db:
                 print(sample)
-            print("Total number of samples", len(experiment_coordinator.sample_db._db_dict))
+            print("Total number of samples", len(experiment_coordinator.sample_db))
             sys.exit()
         if args.list_samples:
             print("--> Mode: List Samples <--")
             count = 0
-            for x, y, s in experiment_coordinator.eval_function:
+            for x, y, s in experiment_coordinator.obj_function:
                 count += 1
                 print(s)
                 print("\tOptimized Parameters:")
@@ -1074,7 +1076,7 @@ if __name__ == '__main__': # don't execute when module is imported
             print("--> Mode: Clean Up Map Matcher Environment <--")
             # List of all sample origins in our database
             sample_origins = [os.path.basename(os.path.dirname(sample.origin)) for sample in experiment_coordinator.sample_db]
-            mme_path = experiment_coordinator.sample_db.sample_generator_config['environment']
+            mme_path = experiment_coordinator.sample_db.sample_generator.config['environment']
             # List of all map matcher ens
             map_matcher_envs = [os.path.abspath(os.path.join(mme_path, path)) for path in os.listdir(mme_path)]
             print("Number of map matcher envs:", len(map_matcher_envs), "; Number of sample origins:", len(sample_origins))
@@ -1101,7 +1103,8 @@ if __name__ == '__main__': # don't execute when module is imported
         if args.add_samples:
             print("--> Mode: Add Samples <--")
             for sample_path in args.add_samples:
-                experiment_coordinator.sample_db.create_sample_from_map_matcher_results(sample_path, override_existing=True)
+                params_dict, sample = experiment_coordinator.sample_db.sample_generator.create_sample_from_map_matcher_results(sample_path, override_existing=True)
+                experiment_coordinator.sample_db.add_sample(sample, params_dict, override_existing=True)
             sys.exit()
         if args.plot_paramspace_line:
             print("--> Mode: Plot Paramspace Projected on Line <--")
@@ -1138,11 +1141,11 @@ if __name__ == '__main__': # don't execute when module is imported
             if input() in ['y', 'Y', 'yes', 'Yes']:
                 for sample in patch_samples_list:
                     # Get the hash to find the unpatched sample in the db
-                    sample_hash = objective_function.SampleDatabase.rosparam_hash(sample.parameters)
+                    sample_hash = sample_sources.SampleDatabase.dict_hash(sample.parameters)
                     # Patch the sample's parameters dict, casting the default value to the correct type
                     sample.parameters[args.new_param[0]] = new_param_type(args.new_param[1])
                     # Update the sample in the db (and its .pkl on disk)
-                    experiment_coordinator.sample_db.update_sample(sample_hash, sample)
+                    experiment_coordinator.sample_db.update_sample(sample_hash, sample) # TODO: fixme after refactor
             else:
                 print("aborted.")
             sys.exit()
