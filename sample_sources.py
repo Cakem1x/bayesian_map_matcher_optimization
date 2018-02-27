@@ -319,6 +319,3 @@ class MapMatcherSampleSource(object):
             # If that's the case, we'll use the name of the directory above, since 'results' is a bad name & probably not unique
             sample.name = os.path.basename(os.path.dirname(results_path))
         return params_dict, sample
-
-    # TODO: Sanity check after sample generation: params from file equal to params from request?
-    # TODO: get sample from finished eval (with params from the results dir), for --add functionality
