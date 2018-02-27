@@ -58,6 +58,8 @@ def create_objective_function_sample(toplevel_directory, sample, sample_generato
     
     Returns the params_dict with which this sample was generated.
     """
+    if not os.path.isdir(toplevel_directory):
+        raise ValueError("given toplevel toplevel_directory is not a directory.")
     sample.origin = toplevel_directory
     sample.translation_errors = []
     sample.rotation_errors = []

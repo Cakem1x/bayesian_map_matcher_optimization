@@ -72,8 +72,8 @@ class ObjectiveFunction(object):
         self._rounding_decimal_places = rounding_decimal_places
         self._normalization = normalization
         if not self._rounding_decimal_places == 0:
-            print("\tWill round floating parameters to", self._rounding_decimal_places, "decimal places.\
-                    (e.g. 0.12918318241288 to", round(0.12918318241288, self._rounding_decimal_places), ")")
+            print("\tWill round floating parameters to", self._rounding_decimal_places, "decimal places."\
+                  "(e.g. 0.12918318241288 to", round(0.12918318241288, self._rounding_decimal_places), ")")
         if self._normalization:
             print("\tWill normalize parameter values within the bounds given by the design space.")
         else:
