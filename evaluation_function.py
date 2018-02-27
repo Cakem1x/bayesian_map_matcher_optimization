@@ -427,7 +427,7 @@ class SampleDatabase(object):
         extracted_sample = self._unpickle_sample(pickle_name)
         # Do a sanity check of the parameters, just in case of a hash collision
         if not complete_rosparams == extracted_sample.parameters:
-            raise LookupError("Got a sample with hash " + params_hashed + ", but its parameters didn't match the requested parameters. (Hash function collision?)", complete_rosparams, extracted_sample.parameters)
+            raise LookupError("Got a sample with hash " + str(params_hashed) + ", but its parameters didn't match the requested parameters. (Hash function collision?)", complete_rosparams, extracted_sample.parameters)
         return extracted_sample
 
     def _pickle_sample(self, sample, pickle_name, override_existing=False):
