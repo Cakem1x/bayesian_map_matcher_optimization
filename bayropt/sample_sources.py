@@ -341,8 +341,6 @@ class FakeMapMatcherSampleSource(SampleSource):
         sample = MapMatcherSample()
         translation_error = np.float_power(x1, 2) + np.float_power(2 * x2 - 10, 2)
         nr_matches = int(round(abs((x1-x2)*np.sin(x1))))
-        print("nr_matches of new fake sample:", nr_matches)
-        print("error of new fake sample:", translation_error)
         sample.translation_errors = [translation_error] * nr_matches
         sample.rotation_errors = [0] * nr_matches
         return sample
