@@ -6,12 +6,12 @@ rng_seed: 42 # seed for numpy's random number generator
 
 # Configures where to get samples for defining the acquisition function.
 sample_source:
-  type: "SampleDatabase" # If no database is desired, you could use e.g. FakeMapMatcherSampleSource directly
+  type: "SampleDatabase" # If no database is desired, you could use e.g. MapMatcherFakeSource directly
   config: 
     sample_directory: "../data_store/samples"
     database_path: "../data_store/sample_db.pkl"
     sample_generator: # This expects a sample_source that is actually able to create samples
-      type: "FakeMapMatcherSampleSource"
+      type: "MapMatcherFakeSource"
       config: {} # This is a place for additional configuration, which is specific to the type of generator
 
 # Configures how to measure the quality of a sample

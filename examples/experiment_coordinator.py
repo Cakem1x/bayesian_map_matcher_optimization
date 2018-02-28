@@ -71,15 +71,15 @@ class ExperimentCoordinator(object):
         else:
             sample_source_defs = self._params['sample_source']
         print("\t --> Creating sample generator.")
-        if sample_source_defs['type'] == "MapMatcherSampleSource":
+        if sample_source_defs['type'] == "MapMatcherScriptSource":
             sample_generator_config = sample_source_defs['config']
             # Resolve relative paths
             sample_generator_config['evaluator_executable'] = self._resolve_relative_path(sample_generator_config['evaluator_executable'])
             sample_generator_config['environment'] = self._resolve_relative_path(sample_generator_config['environment'])
             sample_generator_config['dataset'] = self._resolve_relative_path(sample_generator_config['dataset'])
-            sample_generator = bayropt.MapMatcherSampleSource(sample_generator_config)
-        elif sample_source_defs['type'] == "FakeMapMatcherSampleSource":
-            sample_generator = bayropt.FakeMapMatcherSampleSource()
+            sample_generator = bayropt.MapMatcherScriptSource(sample_generator_config)
+        elif sample_source_defs['type'] == "MapMatcherFakeSource":
+            sample_generator = bayropt.MapMatcherFakeSource()
         else:
             raise ValueError("Unknown sample source type", sample_source_defs['type'])
         if use_db:

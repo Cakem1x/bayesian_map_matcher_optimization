@@ -22,7 +22,7 @@ Samples are used to define an objective function (see objective_function.py) via
 Sample sources are expected to implement the __getitem__ method over which they'll return a sample.
 This modules expects parameters that define a sample as a python dictionary.
 
-For quick tests, you can use MapMatcherSampleSourceTest to get some fake MapMatcherSample objects without long evaluation durations.
+For quick tests, you can use MapMatcherScriptSourceTest to get some fake MapMatcherSample objects without long evaluation durations.
 When using a real sample source, consider using within the SampleDatabase class.
 The SampleDatabase can be used as a intermediate layer between objective function and your actual sample source.
 It will save all generated sample in a pickled dictionary.
@@ -257,9 +257,9 @@ class SampleDatabase(SampleSource):
         return hash(frozenset(params_dict.items()))
 
 
-class MapMatcherSampleSource(SampleSource):
+class MapMatcherScriptSource(SampleSource):
     """
-    The MapMatcherSampleSource generates MapMatcherSamples by using an external map matcher pipeline.
+    The MapMatcherScriptSource generates MapMatcherSamples by using an external map matcher pipeline.
     This class calls the external map matcher pipeline by using two methods defined in MAP_MATCHER_INTERFACE_MODULE:
         * generate_sample(params_dict, config:
             This method is called whenever a new evaluation process needs to get started.
@@ -275,7 +275,7 @@ class MapMatcherSampleSource(SampleSource):
     """
     def __init__(self, config):
         """
-        Initializes the MapMatcherSampleSource.
+        Initializes the MapMatcherScriptSource.
         :param config: Config for the sample generation in the MAP_MATCHER_INTERFACE_MODULE.
         """
         assert(not MAP_MATCHER_INTERFACE_MODULE is None) # This class requires you to set the MAP_MATCHER_INTERFACE_MODULE (see class docstring).
@@ -298,7 +298,7 @@ class MapMatcherSampleSource(SampleSource):
     @property
     def sample_type(self):
         """
-        The MapMatcherSampleSource supplies MapMatcherSamples.
+        The MapMatcherScriptSource supplies MapMatcherSamples.
         """
         return MapMatcherSample
 
@@ -323,7 +323,7 @@ class MapMatcherSampleSource(SampleSource):
             sample.name = os.path.basename(os.path.dirname(results_path))
         return params_dict, sample
 
-class FakeMapMatcherSampleSource(SampleSource):
+class MapMatcherFakeSource(SampleSource):
     """
     Generates fake MapMatcherSamples.
     Instead of actually running an evaluation process, it determines the sample's contents with the following functions:
@@ -333,7 +333,7 @@ class FakeMapMatcherSampleSource(SampleSource):
     duration: always 0, since currently not used
     """
     def __init__(self):
-        print("Creating FAKE(!) MapMatcherSampleSource. Take care not to put those samples into your real sample database!")
+        print("Creating FAKE(!) MapMatcherScriptSource. Take care not to put those samples into your real sample database!")
 
     def __getitem__(self, params_dict):
         x1 = params_dict['x1']
@@ -348,6 +348,6 @@ class FakeMapMatcherSampleSource(SampleSource):
     @property
     def sample_type(self):
         """
-        The MapMatcherSampleSource supplies MapMatcherSamples.
+        The MapMatcherScriptSource supplies MapMatcherSamples.
         """
         return MapMatcherSample
