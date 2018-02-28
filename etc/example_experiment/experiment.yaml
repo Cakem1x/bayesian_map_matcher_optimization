@@ -1,0 +1,55 @@
+# All relative paths in here are assumed to be relative to this file's location
+
+plots_directory: "results"
+default_rosparams_yaml_path: "default_params.yaml"
+rng_seed: 42 # seed for numpy's random number generator
+
+# Configures where to get samples for defining the acquisition function.
+sample_source:
+  type: "SampleDatabase" # If no database is desired, you could use e.g. FakeMapMatcherSampleSource directly
+  config: 
+    sample_directory: "../data_store/samples"
+    database_path: "../data_store/sample_db.pkl"
+    sample_generator: # This expects a sample_source that is actually able to create samples
+      type: "FakeMapMatcherSampleSource"
+      config: {} # This is a place for additional configuration, which is specific to the type of generator
+
+# Configures how to measure the quality of a sample
+performance_measure:
+  type: "MixerMeasure"
+  error_measure: # measure for errors
+    type: "LogisticMaximumErrorMeasure"
+    max_relevant_error: 0.4
+    submap_size: 5
+  matches_measure: # measure for nr. of matches
+    type: "NrMatchesMeasure"
+    expected_nr_matches: 60
+  matches_weight: 0.5
+rounding_decimal_places: 2
+#rounding_decimal_places: 4 # 0.03915 --> 0.0392 (round to the fourth decimal place)
+normalize: True
+
+gpr_params:
+  observation_noise: 0.005
+
+optimizer_params:
+  pre_iteration_random_points: 0
+  samples_per_iteration: 1
+  kappa: 5
+  kappa_fine_tuning: 1
+
+optimization_definitions:
+  Test Dim 1:
+    rosparam_name: "x1"
+    min_bound: 0.05
+    max_bound: 2.0
+  Test Dim 2:
+    rosparam_name: "x2"
+    min_bound: 0.45
+    max_bound: 8.0
+
+# List of (optimized_)rosparam dicts initialization values (has to fit the optimization_definitions)
+# The optimizer requires at least one initialization value to work.
+optimizer_initialization:
+  - x1: 0.2
+    x2: 5.0
