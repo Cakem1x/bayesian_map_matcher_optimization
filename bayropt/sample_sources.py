@@ -6,14 +6,11 @@
 ##########################################################################
 
 import os
+import sys
 import pickle
 import numpy as np
 
 from .samples import MapMatcherSample
-# import your map matcher specific interface implementation here
-#import dlr_map_matcher_interface_tools
-MAP_MATCHER_INTERFACE_MODULE = None # dlr_map_matcher_interface_tools
-
 
 """
 Contains classes that serve as sample sources and are able to generate samples.
@@ -260,7 +257,7 @@ class SampleDatabase(SampleSource):
 class MapMatcherScriptSource(SampleSource):
     """
     The MapMatcherScriptSource generates MapMatcherSamples by using an external map matcher pipeline.
-    This class calls the external map matcher pipeline by using two methods defined in MAP_MATCHER_INTERFACE_MODULE:
+    This class calls the external map matcher pipeline by using two python functions that are imported during runtime into interface_module:
         * generate_sample(params_dict, config:
             This method is called whenever a new evaluation process needs to get started.
             :param params_dict: Contains all parameters for the map matcher, to which the sample is sensitive.
@@ -271,15 +268,31 @@ class MapMatcherScriptSource(SampleSource):
             It is used to process the evaluation data and populate the given sample object with that data.
             :param dir: Path to where the results lie. Those results can be whatever is convenient for your map matcher implementation.
             :param sample: The sample that should get populated with the evaluation result.
-            :param config: Config for your MAP_MATCHER_INTERFACE_MODULE implementation.
+            :param config: Config dict for this class and for your interface_module implementation.
+                           The complete dict will be conveyed to your interface implementation's functions.
+                           At key 'interface_module', the MapMatcherScriptSource expects you to tell it where to find the interface_module.
+                           Either give an absolute path to the script (e.g. /home/foo/map_matcher_dev/scripts/interface.py) or
+                           the name of a script that already is part of the python path (e.g. interface).
     """
     def __init__(self, config):
         """
         Initializes the MapMatcherScriptSource.
-        :param config: Config for the sample generation in the MAP_MATCHER_INTERFACE_MODULE.
+        :param config: Config for the sample generation in the interface_module.
         """
-        assert(not MAP_MATCHER_INTERFACE_MODULE is None) # This class requires you to set the MAP_MATCHER_INTERFACE_MODULE (see class docstring).
+        print("Setting up MapMatcherScriptSource...")
         self.config = config
+        # import the map matcher specific interface implementation
+        if os.path.isabs(self.config['interface_module']):
+            print("\tGot absolute path to an interface script:", self.config['interface_module'])
+            interface_script_name = os.path.splitext(os.path.basename(self.config['interface_module']))[0]
+            interface_script_dir = os.path.dirname(self.config['interface_module'])
+            print("\tAdding directory", interface_script_dir, "to the python path")
+            sys.path.append(interface_script_dir)
+        else:
+            interface_script_name = self.config['interface_module']
+            print("\tDidn't get absolute path: Using script", interface_script_name, ", which can hopefully be found by python.")
+        print("\tImporting interface script", interface_script_name)
+        self.interface_module = __import__(interface_script_name)
 
     def __getitem__(self, params_dict):
         """
@@ -288,7 +301,7 @@ class MapMatcherScriptSource(SampleSource):
         :param params_dict: A dictionary of parameters of the requested sample.
         """
         # This call will lock until the map matcher evaluation is finished
-        results_path = MAP_MATCHER_INTERFACE_MODULE.generate_sample(params_dict, self.config)
+        results_path = self.interface_module.generate_sample(params_dict, self.config)
         generated_sample_params_dict, generated_sample = self.create_sample_from_map_matcher_results(results_path)
         # Check if the parameters were conveyed correctly
         if not generated_sample_params_dict == params_dict:
@@ -307,7 +320,7 @@ class MapMatcherScriptSource(SampleSource):
         Creates a new Sample object from a finished map matcher run and adds it to the database.
 
         :param results_path: The path to the directory which contains the map matcher's results.
-        :return: Tuple with the params_dict of the added sample (determined by the MAP_MATCHER_INTERFACE_MODULE) and the sample itself.
+        :return: Tuple with the params_dict of the added sample (determined by the interface_module) and the sample itself.
         """
 
         results_path = os.path.abspath(results_path)
@@ -315,7 +328,7 @@ class MapMatcherScriptSource(SampleSource):
         sample = MapMatcherSample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
-        params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self.config)
+        params_dict = self.interface_module.create_objective_function_sample(results_path, sample, self.config)
         # Calculate a name for the sample
         sample.name = os.path.basename(results_path)
         if sample.name == "results": # In some cases the results are placed in a dir called 'results'
