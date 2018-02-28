@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from mpl_toolkits.mplot3d import axes3d # required for 3d plots
 import numpy as np
-import re
 import os
 import yaml
 import sys
@@ -71,7 +70,6 @@ class ExperimentCoordinator(object):
             sample_source_defs = self._params['sample_source']['config']['sample_generator']
         else:
             sample_source_defs = self._params['sample_source']
-        print("\t --> Creating sample generator.")
         if sample_source_defs['type'] == "MapMatcherScriptSource":
             sample_generator_config = sample_source_defs['config']
             # Resolve relative paths
@@ -86,7 +84,6 @@ class ExperimentCoordinator(object):
         if use_db:
             database_path = self._resolve_relative_path(self._params['sample_source']['config']['database_path'])
             sample_directory_path = self._resolve_relative_path(self._params['sample_source']['config']['sample_directory'])
-            print("\t --> Creating SampleDatabase using the map matcher sample source.")
             self.sample_db = bayropt.SampleDatabase(database_path, sample_directory_path, sample_generator)
         else:
             print("\tWARNING: Not using sample db, plots will probably crash now")
@@ -96,7 +93,7 @@ class ExperimentCoordinator(object):
         # Setup the objective function
         ###########
         self.optimization_defs = self._params['optimization_definitions']
-        default_params = yaml.safe_load(open(rosparams_path))
+        default_params = yaml.load(open(rosparams_path))
         self.performance_measure = bayropt.PerformanceMeasure.from_dict(self._params['performance_measure'])
         self.obj_function = bayropt.ObjectiveFunction(self.sample_db, self.performance_measure,
                                                       default_params, self.opt_bounds(),
@@ -1060,7 +1057,7 @@ if __name__ == '__main__': # don't execute when module is imported
             sys.exit()
 
         # Load the parameters from the yaml into a dict
-        experiment_parameters_dict = yaml.safe_load(open(args.experiment_yaml))
+        experiment_parameters_dict = yaml.load(open(args.experiment_yaml))
         relpath_root = os.path.abspath(os.path.dirname(args.experiment_yaml))
         # Open the file handle to the database dict
         experiment_coordinator = ExperimentCoordinator(experiment_parameters_dict, relpath_root)
@@ -1191,7 +1188,7 @@ if __name__ == '__main__': # don't execute when module is imported
                 print("\t\t", name, ": ", path, sep="")
             # make a list of corresponding values from 0 to n-1, to fix the positions on the x-axis
             x_axis = range(len(param_names))
-            best_samples = [experiment_coordinator.sample_db[yaml.safe_load(path)] for path in param_file_paths]
+            best_samples = [experiment_coordinator.sample_db[yaml.load(path)] for path in param_file_paths]
             # create the plot and store fix,axes for further fine tuning and saving
             fig, axes = experiment_coordinator._samples_plot(x_axis_ticks=param_names, samples=best_samples, x_axis_pos=x_axis, bar_width=0.3)
             #fig.suptitle("Parameter Comparison", fontsize=16, fontweight='bold')
@@ -1235,11 +1232,6 @@ if __name__ == '__main__': # don't execute when module is imported
 
     yaml.add_constructor(u'!radians', construct_angle_radians)
     yaml.add_constructor(u'!degrees', construct_angle_degrees)
-    # allow both !degrees 180, !radians 2*pi
-    pattern = re.compile(r'^deg\([^\)]*\)$')
-    yaml.add_implicit_resolver(u'!degrees', pattern, first="deg(")
-    pattern = re.compile(r'^rad\([^\)]*\)$')
-    yaml.add_implicit_resolver(u'!radians', pattern, first="rad(")
     #################################
 
     # Execute cmdline interface
