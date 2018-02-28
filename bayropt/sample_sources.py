@@ -154,9 +154,11 @@ class SampleDatabase(SampleSource):
     def __iter__(self):
         """
         Iterator for getting all sample objects contained in the database.
+
+        :return: Tuple (s, p), with the Sample object s and the corresponding params_dict p.
         """
         for sample in self._db_dict.values():
-            yield self._unpickle_sample(sample['pickle_name'])
+            yield self._unpickle_sample(sample['pickle_name']), sample['params_dict']
 
     def _to_pickle_path(self, pickle_name):
         """

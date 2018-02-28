@@ -237,9 +237,9 @@ class ObjectiveFunction(object):
             y: The sample's value as given by the current performance measure.
             s: The sample itself, in case other information needs to be extracted.
         """
-        for sample in self.sample_source:
-            if self._defined_by(sample.parameters):
-                yield sample.parameters, self.performance_measure(sample), sample
+        for sample, params_dict in self.sample_source:
+            if self._defined_by(params_dict):
+                yield params_dict, self.performance_measure(sample), sample
 
     def _defined_by(self, complete_params):
         """
