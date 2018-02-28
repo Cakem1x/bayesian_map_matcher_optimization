@@ -205,7 +205,7 @@ class SampleDatabase(SampleSource):
         :param override_existing: Whether an exception should be thrown if a sample with that name or hash already exists.
         """
         if sample.name is None:
-            sample.name = str(SampleDatabase.dict_hash(sample))
+            sample.name = str(SampleDatabase.dict_hash(params_dict))
             print("\tWarning:", "sample's name is None. Setting it to the hash of its parameters:", sample.name)
         self._pickle_sample(sample, sample.name, override_existing)
         params_hashed = SampleDatabase.dict_hash(params_dict)
