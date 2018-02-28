@@ -158,7 +158,7 @@ class SampleDatabase(SampleSource):
         :return: Tuple (s, p), with the Sample object s and the corresponding params_dict p.
         """
         for sample in self._db_dict.values():
-            yield self._unpickle_sample(sample['pickle_name']), sample['params_dict']
+            yield self._unpickle_sample(sample['pickle_name']), sample['params_dict'].copy()
 
     def _to_pickle_path(self, pickle_name):
         """
