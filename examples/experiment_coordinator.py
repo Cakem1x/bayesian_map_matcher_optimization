@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from mpl_toolkits.mplot3d import axes3d # required for 3d plots
 import numpy as np
+import re
 import os
 import yaml
 import sys
@@ -1208,6 +1209,38 @@ if __name__ == '__main__': # don't execute when module is imported
 
         while True:
             experiment_coordinator.iterate()
+
+    # Add hacky rosparam yaml support
+    # Taken from rosparam, to prevent having an explicit dependency on it.
+    # See http://docs.ros.org/jade/api/rosparam/html/rosparam-pysrc.html
+    def construct_angle_radians(loader, node):
+        """
+        python-yaml utility for converting rad(num) into float value
+        """
+        value = loader.construct_scalar(node).strip()
+        exprvalue = value.replace('pi', 'math.pi')
+        if exprvalue.startswith("rad("):
+            exprvalue = exprvalue[4:-1]
+        return float(eval(exprvalue))
+    def construct_angle_degrees(loader, node):
+        """
+        Taken from rosparam, to prevent having an explicit dependency on it. (see http://docs.ros.org/jade/api/rosparam/html/rosparam-pysrc.html)
+        python-yaml utility for converting deg(num) into float value
+        """
+        value = loader.construct_scalar(node)
+        exprvalue = value
+        if exprvalue.startswith("deg("):
+            exprvalue = exprvalue.strip()[4:-1]
+        return float(exprvalue) * np.pi / 180.0
+
+    yaml.add_constructor(u'!radians', construct_angle_radians)
+    yaml.add_constructor(u'!degrees', construct_angle_degrees)
+    # allow both !degrees 180, !radians 2*pi
+    pattern = re.compile(r'^deg\([^\)]*\)$')
+    yaml.add_implicit_resolver(u'!degrees', pattern, first="deg(")
+    pattern = re.compile(r'^rad\([^\)]*\)$')
+    yaml.add_implicit_resolver(u'!radians', pattern, first="rad(")
+    #################################
 
     # Execute cmdline interface
     command_line_interface()
