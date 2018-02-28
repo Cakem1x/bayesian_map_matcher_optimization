@@ -10,5 +10,7 @@
 *.pkl
 # ignore svg (may get generated when running example code)
 *.svg
-# ignore yaml files (may get generated when running example code)
-*.yaml
+# ignore specific yaml files that get generated when running example code
+*iteration.yaml
+# ignore specific markdown files that get generated when running example code
+sampled_params.md
