@@ -20,7 +20,7 @@ optimized_params contains only those parameters that are currently being optimiz
 To get from a specific set of optimized_params to the complete_params, default_params are used to determine the values of all non-optimized parameters.
 """
 
-from performance_measures import PerformanceMeasure
+from .performance_measures import PerformanceMeasure
 
 class ObjectiveFunction(object):
     """

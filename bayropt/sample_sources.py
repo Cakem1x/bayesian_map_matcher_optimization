@@ -9,7 +9,7 @@ import os
 import pickle
 import numpy as np
 
-import samples
+from .samples import MapMatcherSample
 # import your map matcher specific interface implementation here
 #import dlr_map_matcher_interface_tools
 MAP_MATCHER_INTERFACE_MODULE = None # dlr_map_matcher_interface_tools
@@ -298,7 +298,7 @@ class MapMatcherSampleSource(SampleSource):
         """
         The MapMatcherSampleSource supplies MapMatcherSamples.
         """
-        return samples.MapMatcherSample
+        return MapMatcherSample
 
     def create_sample_from_map_matcher_results(self, results_path, override_existing=False):
         """
@@ -310,7 +310,7 @@ class MapMatcherSampleSource(SampleSource):
 
         results_path = os.path.abspath(results_path)
         print("\tCreating new Sample from map matcher result at", results_path, end=".\n")
-        sample = samples.MapMatcherSample()
+        sample = MapMatcherSample()
         # This function actually fills the sample with data.
         # Its implementation depends on which map matching pipeline is optimized.
         params_dict = MAP_MATCHER_INTERFACE_MODULE.create_objective_function_sample(results_path, sample, self.config)
@@ -336,7 +336,7 @@ class FakeMapMatcherSampleSource(SampleSource):
     def __getitem__(self, params_dict):
         x1 = params_dict['x1']
         x2 = params_dict['x2']
-        sample = samples.MapMatcherSample()
+        sample = MapMatcherSample()
         translation_error = np.float_power(x1, 2) + np.float_power(2 * x2 - 10, 2)
         nr_matches = int(round(abs((x1-x2)*np.sin(x1))))
         print("nr_matches of new fake sample:", nr_matches)
@@ -350,4 +350,4 @@ class FakeMapMatcherSampleSource(SampleSource):
         """
         The MapMatcherSampleSource supplies MapMatcherSamples.
         """
-        return samples.MapMatcherSample
+        return MapMatcherSample

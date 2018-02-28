@@ -4,19 +4,14 @@
 # SPDX-License-Identifier: BSD-2-Clause                                  #
 ##########################################################################
 
-# Local imports
-import objective_function
-import sample_sources
-import performance_measures
+import bayropt
 
-# Foreign packages
 import pickle
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from mpl_toolkits.mplot3d import axes3d # required for 3d plots
 import numpy as np
 import os
-import rosparam
 import yaml
 import sys
 import shutil # for removing full filetrees
@@ -64,33 +59,48 @@ class ExperimentCoordinator(object):
 
         # Resolve relative paths
         self._params['plots_directory'] = self._resolve_relative_path(self._params['plots_directory'])
-        database_path = self._resolve_relative_path(self._params['database_path'])
-        sample_directory_path = self._resolve_relative_path(self._params['sample_directory'])
         rosparams_path = self._resolve_relative_path(self._params['default_rosparams_yaml_path'])
-        sample_generator_config = self._params['sample_generator_config']
-        sample_generator_config['evaluator_executable'] = self._resolve_relative_path(sample_generator_config['evaluator_executable'])
-        sample_generator_config['environment'] = self._resolve_relative_path(sample_generator_config['environment'])
-        sample_generator_config['dataset'] = self._resolve_relative_path(sample_generator_config['dataset'])
 
         ###########
-        # Setup the SampleDatabase object
+        # Setup the sample source
         ###########
         print("Setting up sample source...")
-        print("\t --> Creating map matcher sample source.")
-        map_matcher_sample_source = sample_sources.MapMatcherSampleSource(sample_generator_config)
-        print("\t --> Creating SampleDatabase using the map matcher sample source.")
-        self.sample_db = sample_sources.SampleDatabase(database_path, sample_directory_path, map_matcher_sample_source)
+        use_db = self._params['sample_source']['type'] = "SampleDatabase" # check if sample db is used
+        if use_db:
+            sample_source_defs = self._params['sample_source']['config']['sample_generator']
+        else:
+            sample_source_defs = self._params['sample_source']
+        print("\t --> Creating sample generator.")
+        if sample_source_defs['type'] == "MapMatcherSampleSource":
+            sample_generator_config = sample_source_defs['config']
+            # Resolve relative paths
+            sample_generator_config['evaluator_executable'] = self._resolve_relative_path(sample_generator_config['evaluator_executable'])
+            sample_generator_config['environment'] = self._resolve_relative_path(sample_generator_config['environment'])
+            sample_generator_config['dataset'] = self._resolve_relative_path(sample_generator_config['dataset'])
+            sample_generator = bayropt.MapMatcherSampleSource(sample_generator_config)
+        elif sample_source_defs['type'] == "FakeMapMatcherSampleSource":
+            sample_generator = bayropt.FakeMapMatcherSampleSource()
+        else:
+            raise ValueError("Unknown sample source type", sample_source_defs['type'])
+        if use_db:
+            database_path = self._resolve_relative_path(self._params['sample_source']['config']['database_path'])
+            sample_directory_path = self._resolve_relative_path(self._params['sample_source']['config']['sample_directory'])
+            print("\t --> Creating SampleDatabase using the map matcher sample source.")
+            self.sample_db = bayropt.SampleDatabase(database_path, sample_directory_path, sample_generator)
+        else:
+            print("\tWARNING: Not using sample db, plots will probably crash now")
+            self.sample_db = sample_generator
 
         ###########
-        # Setup the evaluation function object
+        # Setup the objective function
         ###########
         self.optimization_defs = self._params['optimization_definitions']
-        default_params = rosparam.load_file(rosparams_path)[0][0]
-        self.performance_measure = performance_measures.PerformanceMeasure.from_dict(self._params['performance_measure'])
-        self.obj_function = objective_function.ObjectiveFunction(self.sample_db, self.performance_measure,
-                                                                 default_params, self.opt_bounds,
-                                                                 self._params['rounding_decimal_places'],
-                                                                 normalization=False) # TODO: Implement normalization
+        default_params = yaml.safe_load(open(rosparams_path))
+        self.performance_measure = bayropt.PerformanceMeasure.from_dict(self._params['performance_measure'])
+        self.obj_function = bayropt.ObjectiveFunction(self.sample_db, self.performance_measure,
+                                                      default_params, self.opt_bounds,
+                                                      self._params['rounding_decimal_places'],
+                                                      normalization=False) # TODO: Implement normalization
         ###########
         # Create an BayesianOptimization object, that contains the GPR logic.
         # Will supply us with new param-samples and will try to model the map matcher metric function.
@@ -1063,7 +1073,7 @@ if __name__ == '__main__': # don't execute when module is imported
                 for display_name in experiment_coordinator.optimization_defs.keys():
                     print("\t\t", display_name, "=", x[experiment_coordinator._to_rosparam(display_name)])
                 print("\tMetric-value:", y)
-                if isinstance(experiment_coordinator.performance_measure, performance_measures.MixerMeasure):
+                if isinstance(experiment_coordinator.performance_measure, bayropt.MixerMeasure):
                     print("\t\terror measure", type(experiment_coordinator.performance_measure.error_measure), "=",
                           experiment_coordinator.performance_measure.error_measure(s),
                           "(weight", 1 - experiment_coordinator.performance_measure.matches_weight, ")")
@@ -1141,7 +1151,7 @@ if __name__ == '__main__': # don't execute when module is imported
             if input() in ['y', 'Y', 'yes', 'Yes']:
                 for sample in patch_samples_list:
                     # Get the hash to find the unpatched sample in the db
-                    sample_hash = sample_sources.SampleDatabase.dict_hash(sample.parameters)
+                    sample_hash = bayropt.SampleDatabase.dict_hash(sample.parameters)
                     # Patch the sample's parameters dict, casting the default value to the correct type
                     sample.parameters[args.new_param[0]] = new_param_type(args.new_param[1])
                     # Update the sample in the db (and its .pkl on disk)
@@ -1172,7 +1182,7 @@ if __name__ == '__main__': # don't execute when module is imported
                 print("\t\t", name, ": ", path, sep="")
             # make a list of corresponding values from 0 to n-1, to fix the positions on the x-axis
             x_axis = range(len(param_names))
-            best_samples = [experiment_coordinator.sample_db[rosparam.load_file(path)[0][0]] for path in param_file_paths]
+            best_samples = [experiment_coordinator.sample_db[yaml.safe_load(path)] for path in param_file_paths]
             # create the plot and store fix,axes for further fine tuning and saving
             fig, axes = experiment_coordinator._samples_plot(x_axis_ticks=param_names, samples=best_samples, x_axis_pos=x_axis, bar_width=0.3)
             #fig.suptitle("Parameter Comparison", fontsize=16, fontweight='bold')
