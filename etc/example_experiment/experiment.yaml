@@ -51,5 +51,5 @@ optimization_definitions:
 # List of (optimized_)rosparam dicts initialization values (has to fit the optimization_definitions)
 # The optimizer requires at least one initialization value to work.
 optimizer_initialization:
-  - x1: 0.2
-    x2: 5.0
+  - x1: 1.91
+    x2: 3.22

@@ -214,6 +214,9 @@ class ExperimentCoordinator(object):
                 plot_body.set_facecolor('blue' if i == 0 else 'yellow')
                 plot_body.set_edgecolor('black')
         else: # Special case for when only one match happened
+            print(sample.nr_matches)
+            print(sample.translation_errors)
+            print(sample.rotation_errors)
             axes[0].scatter([1], sample.rotation_errors)
             axes[1].scatter([1], sample.translation_errors)
         # Set titles
