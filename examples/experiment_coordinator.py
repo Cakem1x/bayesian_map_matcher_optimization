@@ -98,16 +98,16 @@ class ExperimentCoordinator(object):
         default_params = yaml.safe_load(open(rosparams_path))
         self.performance_measure = bayropt.PerformanceMeasure.from_dict(self._params['performance_measure'])
         self.obj_function = bayropt.ObjectiveFunction(self.sample_db, self.performance_measure,
-                                                      default_params, self.opt_bounds,
+                                                      default_params, self.opt_bounds(),
                                                       self._params['rounding_decimal_places'],
-                                                      normalization=False) # TODO: Implement normalization
+                                                      normalization=self._params['normalize'])
         ###########
         # Create an BayesianOptimization object, that contains the GPR logic.
         # Will supply us with new param-samples and will try to model the map matcher metric function.
         ###########
         print("Setting up Optimizer...")
         # Create the optimizer object
-        self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds, verbose=0)
+        self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds(self._params['normalize']), verbose=0)
         # Create a kwargs member for passing to the maximize method (see iterate())
         # Those parameters will be passed to the GPR member of the optimizer
         gpr_params = {'alpha': 1e-10, 'matern_nu': 2.5} # set default parameters
@@ -132,16 +132,20 @@ class ExperimentCoordinator(object):
         init_dict = {p_name: [] for p_name in self._params['optimizer_initialization'][0]}
         # Fill init_dict with values from the optimizer initialization:
         for optimized_rosparams in self._params['optimizer_initialization']:
+            if self._params['normalize']:
+                self.obj_function.normalize_parameters(optimized_rosparams)
             for p_name, p_value in optimized_rosparams.items():
                 init_dict[p_name].append(p_value)
         # If desired, previously generated observations will be used as initialization as well.
         if use_previous_observations:
             print("\tUsing previous observations to initialize the optimizer.")
-            for sample_complete_rosparams, y, s in self.obj_function: # gets the params dict of each sample
+            for complete_params, y, s in self.obj_function: # gets the complete params dict of each sample
                 if y > 0 or not only_nonzero_observations:
+                    if self._params['normalize']:
+                        self.obj_function.normalize_parameters(complete_params)
                     # only get values of optimized params; requires at least one initialization value defined in the experiment.yaml, but that should be the case anyway.
                     for optimized_rosparam in self._params['optimizer_initialization'][0].keys():
-                        init_dict[optimized_rosparam].append(sample_complete_rosparams[optimized_rosparam])
+                        init_dict[optimized_rosparam].append(complete_params[optimized_rosparam])
         # Add the initilizations via the BayesianOptimization framework's explore method
         self.optimizer.explore(init_dict)
 
@@ -214,9 +218,6 @@ class ExperimentCoordinator(object):
                 plot_body.set_facecolor('blue' if i == 0 else 'yellow')
                 plot_body.set_edgecolor('black')
         else: # Special case for when only one match happened
-            print(sample.nr_matches)
-            print(sample.translation_errors)
-            print(sample.rotation_errors)
             axes[0].scatter([1], sample.rotation_errors)
             axes[1].scatter([1], sample.translation_errors)
         # Set titles
@@ -761,7 +762,7 @@ class ExperimentCoordinator(object):
             
             self.handle_new_best_parameters()
             # reset optimizer
-            self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds, verbose=0)
+            self.optimizer = BayesianOptimization(self.obj_function.evaluate, self.opt_bounds(self._params['normalize']), verbose=0)
 
     def iterate(self):
         """
@@ -879,15 +880,19 @@ class ExperimentCoordinator(object):
             fine_tune_suffix = "_finetuned"
         return str(iteration).zfill(5) + "_iteration" + fine_tune_suffix
 
-    @property
-    def opt_bounds(self):
+    def opt_bounds(self, normalized=False):
         """
-        Returns a dict of optimization bounds.
+        Returns a dict of optimization bounds, the way the objective function and the optimizer wants it.
         It's indexed via rosparam_name and contains a tuple (min, max) bounds.
+
+        :param normalized: If True, the min_bound will always be 0 and the max_bound will always be 1.
         """
         opt_bounds = dict()
         for p_name, p_defs in self.optimization_defs.items():
-            opt_bounds[p_defs['rosparam_name']] = (p_defs['min_bound'], p_defs['max_bound'])
+            if normalized:
+                opt_bounds[p_defs['rosparam_name']] = (0, 1)
+            else:
+                opt_bounds[p_defs['rosparam_name']] = (p_defs['min_bound'], p_defs['max_bound'])
         return opt_bounds
 
     @property

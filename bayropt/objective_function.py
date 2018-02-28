@@ -94,14 +94,11 @@ class ObjectiveFunction(object):
         :param optimized_params: A keyworded argument list (used as a dictionary with parameter names as keys).
         """
 
+        print("\033[1;34mSampling objective function at:", end="")
         # Preprocess the parameters
-        self.preprocess_optimized_params(optimized_params)
-        print("\033[1;34mSampling objective function at:")
         if self._normalization:
-            # denormalize parameters
             normalized_parameters = optimized_params.copy()
-            print("\n\t >> Denormalizing parameters! << ", end="")
-            self.denormalize_parameters(optimized_params)
+        self.preprocess_optimized_params(optimized_params)
         for name, value in optimized_params.items():
             print() # newline
             print("\t", name, " = ", value, sep="", end="")
@@ -129,14 +126,14 @@ class ObjectiveFunction(object):
         :param optimized_params: The params dict, from the evaluation modules, where parameter values are in [min_bound, max_bound].
         :returns: The normalized params dict for the optimization modules, where parameter values are in [0,1].
         """
-        normalized_params = optimized_params.copy()
         for rosparam_name, bounds in self.design_space.items():
-            old_val = normalized_params[rosparam_name] # TODO remove after test
+            assert(optimized_params[rosparam_name] >= bounds[0] and optimized_params[rosparam_name] <= bounds[1])
+            old_val = optimized_params[rosparam_name] # TODO remove after test
             param_range = bounds[1] - bounds[0]
-            normalized_params[rosparam_name] = (normalized_params[rosparam_name] - bounds[0]) / param_range
-            print("Normalizing", rosparam_name, "from", old_val, "to", normalized_params[rosparam_name]) # TODO remove after test
+            optimized_params[rosparam_name] = (optimized_params[rosparam_name] - bounds[0]) / param_range
+            print("Normalizing", rosparam_name, "from", old_val, "to", optimized_params[rosparam_name]) # TODO remove after test
 
-        return normalized_params
+        return optimized_params
 
     def denormalize_parameters(self, optimized_params):
         """
@@ -150,10 +147,9 @@ class ObjectiveFunction(object):
         :returns: The params dict, from the evaluation modules, where parameter values are in [min_bound, max_bound].
         """
         for rosparam_name, bounds in self.design_space.items():
-            old_val = optimized_params[rosparam_name] # TODO remove after test
+            assert(optimized_params[rosparam_name] >= 0 and optimized_params[rosparam_name] <= 1)
             param_range = bounds[1] - bounds[0]
             optimized_params[rosparam_name] = (optimized_params[rosparam_name] * param_range) + bounds[0]
-            print("Denormalizing", rosparam_name, "from", old_val, "to", optimized_params[rosparam_name]) # TODO remove after test
 
         return optimized_params
 
@@ -161,7 +157,7 @@ class ObjectiveFunction(object):
         """
         Takes a dict of optimized parameters as given by the optimizer modules and preprocesses it to fit the evaluation modules.
         
-        This includes a safety check to make sure the parameters requested by the optimizer don't violate the optimization bounds.
+        This includes a safety check to make sure the parameters requested by the optimizer contain all dimensions of the design space.
         Additionally, all parameter types in the given dict will get casted to their respective type in default_params.
         Otherwise, dumping them to a yaml file would (for example) create binarized numpy.float64 values, which possibly can't be parsed by the evaluation modules.
         Also, values will get rounded according to the _rounding_decimal_places member.
@@ -169,17 +165,14 @@ class ObjectiveFunction(object):
         :param optimized_params: The params dict, as requested by the optimizer.
         :returns: The preprocessed params dict, as needed by the ros ecosystem.
         """
-        # Iterate over the optimization bounds and check if the current request doesn't violate them
+        if self._normalization:
+            # denormalize parameters
+            self.denormalize_parameters(optimized_params)
+
+        # Iterate over the design space and check whether all its dimensions are present in the current request
         for rosparam_name, bounds in self.design_space.items():
             if not rosparam_name in optimized_params:
                 raise ValueError(rosparam_name + " should get optimized, but wasn't in given dict of optimized parameters.", optimized_params)
-            p_value = optimized_params[rosparam_name]
-            if p_value > bounds[1]: # max bound
-                raise ValueError(rosparam_name + " value (" + str(p_value) + ") is over max bound (" +\
-                                 str(bounds[1]) + ").")
-            if p_value < bounds[0]: # min bound
-                raise ValueError(rosparam_name + " value (" + str(p_value) + ") is under min bound (" +\
-                                 str(bounds[0]) + ").")
         # Iterate over the current request...
         for p_name, p_value in optimized_params.items():
             # ...check if there are parameters in there, that shouldn't be optimized.
