@@ -352,6 +352,26 @@ class ExperimentCoordinator(object):
         print("\tSaved boxplots of best samples to", path)
         plt.close(fig)
 
+    def _get_state(self):
+        """
+        Returns a dict with all necessary members for saving the experiment's state.
+        """
+        state_dict = {'optimizer': self.optimizer,
+                      'iteration': self.iteration,
+                      'best_samples': self.best_samples,
+                      'max_performance_measure': self.max_performance_measure}
+        print(state_dict)
+        return state_dict
+
+    def _restore_state(self, state_dict):
+        """
+        Restores the experiment's state from a state_dict (see _get_state).
+        """
+        self.optimizer = state_dict['optimizer']
+        self.iteration = state_dict['iteration']
+        self.best_samples = state_dict['best_samples']
+        self.max_performance_measure = state_dict['max_performance_measure']
+
     def _samples_plot(self, x_axis_ticks, samples, x_axis_pos=None, show_pm_values=True, bar_width=1, xticklabels_spacing=1):
         """
         Creates a plot to visualize the data contained in a set of samples
@@ -780,8 +800,8 @@ class ExperimentCoordinator(object):
 
         print("\033[1;4;35m", self.iteration_string(), ":\033[0m", sep="")
         self.optimizer.maximize(init_points=init_points, n_iter=n_iter, kappa=kappa if not self.fine_tune else kappa_fine_tuning, **self.gpr_kwargs)
-        # Dump the gpr's state for later use (e.g. interactive plots)
-        pickle.dump(self, open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
+        # Dump the experiment's state for later use (e.g. interactive plots)
+        pickle.dump(self._get_state(), open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
         # plot this iteration's gpr state in 2d for all optimized parameters
         self.plot_all_single_param()
         # plot this iteration's gpr state in 3d for the first two parameters (only if there are more than one parameter)
@@ -1018,44 +1038,6 @@ if __name__ == '__main__': # don't execute when module is imported
                                  "Take care: Changes to the code and to the parameters won't take effect when restarting an old experiment.")
         args = parser.parse_args()
 
-        if args.plot3d:
-            print("--> Interactive 3D plot mode <--")
-            for path in args.plot3d:
-                experiment_coordinator = pickle.load(open(path, 'rb'))
-                experiment_coordinator.plot_gpr_two_param_3d(None, list(experiment_coordinator._params['optimization_definitions'].keys()))
-            sys.exit()
-        if args.plot_single:
-            print("--> Plot mode (single) <--")
-            for path in args.plot_single:
-                experiment_coordinator = pickle.load(open(path, 'rb'))
-                experiment_coordinator.plot_all_single_param()
-            sys.exit()
-        if args.plot_two:
-            print("--> Plot mode (two) <--")
-            for path in args.plot_two:
-                experiment_coordinator = pickle.load(open(path, 'rb'))
-                experiment_coordinator.plot_all_two_params()
-            sys.exit()
-        if args.plot_max:
-            print("--> Plot mode (max) <--")
-            for path in args.plot_max:
-                experiment_coordinator = pickle.load(open(path, 'rb'))
-                experiment_coordinator.plot_all_new_best_params(plot_all_violin=True)
-            sys.exit()
-        if args.plot_queries:
-            print("--> Mode: Plot Queries <--")
-            experiment_coordinator = pickle.load(open(args.plot_queries, 'rb'))
-            experiment_coordinator.query_points_plot()
-            sys.exit()
-        if args.resume:
-            print("--> Resuming old experiment <--\n"+\
-                  "May cause unexpected behaviour: Code changes won't magically appear in the pickled experiment state and parameter changes won't take effect when resuming an old experiment.")
-            experiment_coordinator = pickle.load(open(args.resume, 'rb'))
-            experiment_coordinator.fine_tune = args.fine_tune # set the fine_tune flag if the user started this script with --fine-tune
-            while True:
-                experiment_coordinator.iterate()
-            sys.exit()
-
         # Load the parameters from the yaml into a dict
         experiment_parameters_dict = yaml.load(open(args.experiment_yaml))
         relpath_root = os.path.abspath(os.path.dirname(args.experiment_yaml))
@@ -1063,6 +1045,45 @@ if __name__ == '__main__': # don't execute when module is imported
         experiment_coordinator = ExperimentCoordinator(experiment_parameters_dict, relpath_root)
 
         # Check cmdline arguments for special modes, default mode (Experiment mode) is below
+        if args.plot3d:
+            print("--> Interactive 3D plot mode <--")
+            for path in args.plot3d:
+                experiment_coordinator._restore_state(pickle.load(open(path, 'rb')))
+                experiment_coordinator.plot_gpr_two_param_3d(None, list(experiment_coordinator._params['optimization_definitions'].keys()))
+            sys.exit()
+        if args.plot_single:
+            print("--> Plot mode (single) <--")
+            for path in args.plot_single:
+                experiment_coordinator._restore_state(pickle.load(open(path, 'rb')))
+                experiment_coordinator.plot_all_single_param()
+            sys.exit()
+        if args.plot_two:
+            print("--> Plot mode (two) <--")
+            for path in args.plot_two:
+                experiment_coordinator._restore_state(pickle.load(open(path, 'rb')))
+                experiment_coordinator.plot_all_two_params()
+            sys.exit()
+        if args.plot_max:
+            print("--> Plot mode (max) <--")
+            for path in args.plot_max:
+                experiment_coordinator._restore_state(pickle.load(open(path, 'rb')))
+                experiment_coordinator.plot_all_new_best_params(plot_all_violin=True)
+            sys.exit()
+        if args.plot_queries:
+            print("--> Mode: Plot Queries <--")
+            experiment_coordinator._restore_state(pickle.load(open(args.plot_queries, 'rb')))
+            experiment_coordinator.query_points_plot()
+            sys.exit()
+        if args.resume:
+            print("--> Resuming old experiment <--\n"+\
+                  "WARNING: May cause unexpected behaviour: Code changes won't magically appear in the pickled experiment state, "+\
+                  "have a look at experiment_coordinator._restore_state to see which parts will be exactly as pickled and which parts can be changed between experiment resuming. "+\
+                  "Changing some parameters like e.g. the design space will probably break the code, since the optimizer module is pickled and won't know that you changed the design space.")
+            experiment_coordinator._restore_state(pickle.load(open(args.resume, 'rb')))
+            experiment_coordinator.fine_tune = args.fine_tune # set the fine_tune flag if the user started this script with --fine-tune
+            while True:
+                experiment_coordinator.iterate()
+            sys.exit()
         if args.list_all_samples:
             print("--> Mode: List All Samples <--")
             for sample in experiment_coordinator.sample_db:
