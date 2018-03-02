@@ -98,7 +98,7 @@ class ObjectiveFunction(object):
         # Preprocess the parameters
         if self._normalization:
             normalized_parameters = optimized_params.copy()
-        self.preprocess_optimized_params(optimized_params)
+        self.preprocess_optimized_params(optimized_params, denormalize=True)
         for name, value in optimized_params.items():
             print() # newline
             print("\t", name, " = ", value, sep="", end="")
@@ -153,7 +153,7 @@ class ObjectiveFunction(object):
 
         return optimized_params
 
-    def preprocess_optimized_params(self, optimized_params):
+    def preprocess_optimized_params(self, optimized_params, denormalize=False):
         """
         Takes a dict of optimized parameters as given by the optimizer modules and preprocesses it to fit the evaluation modules.
         
@@ -163,9 +163,10 @@ class ObjectiveFunction(object):
         Also, values will get rounded according to the _rounding_decimal_places member.
 
         :param optimized_params: The params dict, as requested by the optimizer.
+        :param denormalize: Determines whether the optimized_params should get denormalized as part of the preprocessing. Set to true, if optimized_params are normalized.
         :returns: The preprocessed params dict, as needed by the ros ecosystem.
         """
-        if self._normalization:
+        if denormalize:
             # denormalize parameters
             self.denormalize_parameters(optimized_params)
 
