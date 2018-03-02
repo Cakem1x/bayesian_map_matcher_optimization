@@ -800,6 +800,8 @@ class ExperimentCoordinator(object):
 
         print("\033[1;4;35m", self.iteration_string(), ":\033[0m", sep="")
         self.optimizer.maximize(init_points=init_points, n_iter=n_iter, kappa=kappa if not self.fine_tune else kappa_fine_tuning, **self.gpr_kwargs)
+        # Check if we found a new best parameter set
+        self.handle_new_best_parameters()
         # Dump the experiment's state for later use (e.g. interactive plots)
         pickle.dump(self._get_state(), open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
         # plot this iteration's gpr state in 2d for all optimized parameters
@@ -808,8 +810,6 @@ class ExperimentCoordinator(object):
         display_names = list(self._params['optimization_definitions'].keys())
         if len(display_names) > 1 and len(display_names) < 4: # don't plot all pairs of parameters when there are more then 4, it'll take too much time.
             self.plot_all_two_params()
-        # Check if we found a new best parameter set
-        self.handle_new_best_parameters()
         self.output_sampled_params_table() # output a markdown table with all sampled params
         if len(display_names) > 2:
             self.query_points_plot() # output a pcp with lines for each sampled param
