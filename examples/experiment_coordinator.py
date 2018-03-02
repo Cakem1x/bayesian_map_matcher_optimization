@@ -356,18 +356,25 @@ class ExperimentCoordinator(object):
         """
         Returns a dict with all necessary members for saving the experiment's state.
         """
-        state_dict = {'optimizer': self.optimizer,
+        target_space = self.optimizer.space
+        target_space.target_func = None # Remove reference to objective_function module to avoid pickle crash
+        state_dict = {'optimizer': {
+                          'space': target_space,
+                          'res': self.optimizer.res
+                          },
                       'iteration': self.iteration,
                       'best_samples': self.best_samples,
                       'max_performance_measure': self.max_performance_measure}
-        print(state_dict)
+        target_space.target_func = self.obj_function.evaluate # Restore reference to objective function
         return state_dict
 
     def _restore_state(self, state_dict):
         """
         Restores the experiment's state from a state_dict (see _get_state).
         """
-        self.optimizer = state_dict['optimizer']
+        self.optimizer.space = state_dict['optimizer']['space']
+        self.optimizer.space.target_func = self.obj_function.evaluate # Restore reference to objective function
+        self.optimizer.res = state_dict['optimizer']['res']
         self.iteration = state_dict['iteration']
         self.best_samples = state_dict['best_samples']
         self.max_performance_measure = state_dict['max_performance_measure']
@@ -802,8 +809,6 @@ class ExperimentCoordinator(object):
         self.optimizer.maximize(init_points=init_points, n_iter=n_iter, kappa=kappa if not self.fine_tune else kappa_fine_tuning, **self.gpr_kwargs)
         # Check if we found a new best parameter set
         self.handle_new_best_parameters()
-        # Dump the experiment's state for later use (e.g. interactive plots)
-        pickle.dump(self._get_state(), open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
         # plot this iteration's gpr state in 2d for all optimized parameters
         self.plot_all_single_param()
         # plot this iteration's gpr state in 3d for the first two parameters (only if there are more than one parameter)
@@ -815,6 +820,8 @@ class ExperimentCoordinator(object):
             self.query_points_plot() # output a pcp with lines for each sampled param
         # increase iteration counter
         self.iteration += 1
+        # Dump the experiment's state for later use (e.g. interactive plots)
+        pickle.dump(self._get_state(), open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
 
     def handle_new_best_parameters(self):
         """
