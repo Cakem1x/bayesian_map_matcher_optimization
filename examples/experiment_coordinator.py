@@ -243,7 +243,7 @@ class ExperimentCoordinator(object):
         https://stackoverflow.com/questions/8230638/parallel-coordinates-plot-in-matplotlib
         """
         # create a temporary throwaway contourplot, so creating a colorbar further down the line is possible
-        hack = plt.contourf([[0,0],[0,0]], np.linspace(0, 1, 11), cmap='jet')
+        plt.contourf([[0,0],[0,0]], np.linspace(0, 1, 11), cmap='jet')
         colormap = plt.get_cmap('jet')
         plt.clf() # throw away the contourf
 
@@ -505,12 +505,14 @@ class ExperimentCoordinator(object):
         """
         fig, axes = plt.subplots(2, 2)
         RESOLUTION = 50 # determines the plots' RESOLUTION, i.e. how many values per dimension get sampled the GP
-        OFFSET = 0.01 # offsets the x-, y-axes, so markers at the edge are visible
+        OFFSET_FACTOR = 0.05 # offsets the x-, y-axes, so markers at the edge are visible (percentage of total axis length)
         # Prepare x and y data (the same for all plots)
         x_bounds = self.obj_function.design_space[self._to_rosparam(param_names[0])]
-        x = np.linspace(x_bounds[0] - OFFSET, x_bounds[1] + OFFSET, RESOLUTION)
+        offset_x = OFFSET_FACTOR * (x_bounds[1] - x_bounds[0])
+        x = np.linspace(x_bounds[0] - offset_x, x_bounds[1] + offset_x, RESOLUTION)
         y_bounds = self.obj_function.design_space[self._to_rosparam(param_names[1])]
-        y = np.linspace(y_bounds[0] - OFFSET, y_bounds[1] + OFFSET, RESOLUTION)
+        offset_y = OFFSET_FACTOR * (y_bounds[1] - y_bounds[0])
+        y = np.linspace(y_bounds[0] - offset_y, y_bounds[1] + offset_y, RESOLUTION)
         value_range = self.performance_measure.value_range
         # Set labels for all axes
         for ax in [sub_axes for sublist in axes for sub_axes in sublist]:
@@ -523,17 +525,14 @@ class ExperimentCoordinator(object):
         samples_x, samples_y, samples_z = self._get_filtered_samples(param_names)
         if len(samples_x) > 0: # guard against crashes if no known samples exist in the plane we're currently looking at
             plot = axes[0][0].scatter(samples_x, samples_y, c=samples_z, cmap='hot', edgecolor='', vmin=value_range[0], vmax=value_range[1])
-            # set x,y axis bounds, only needed for the scatter plot
-            axes[0][0].set_xlim(x_bounds[0] - OFFSET, x_bounds[1] + OFFSET)
-            axes[0][0].set_ylim(y_bounds[0] - OFFSET, y_bounds[1] + OFFSET)
             axes[0][0].set_title("All Known Samples")
             fig.colorbar(plot, ax=axes[0][0], ticks=np.linspace(value_range[0], value_range[1], 11), label=str(self.performance_measure))
         ############
         # Prepare mean plot
         # Get observations known to the GPR
-        filtered_X, filtered_Y = self._get_filtered_observations(param_names)
+        filtered_X, filtered_Y = self._get_filtered_observations(param_names, normalization = self._params['normalize'])
         # Get the GPR's estimate data
-        predictionspace = self._get_prediction_space(param_names, RESOLUTION)
+        predictionspace = self._get_prediction_space(param_names, RESOLUTION, normalized=self._params['normalize'])
         mean, sigma = self.optimizer.gp.predict(predictionspace, return_std=True)
         z_mean = np.reshape(mean, (RESOLUTION, RESOLUTION))
         plot = axes[0][1].contourf(x, y, z_mean, levels=np.linspace(value_range[0], value_range[1], RESOLUTION), **contour_kwargs)
@@ -566,6 +565,10 @@ class ExperimentCoordinator(object):
                            filtered_X.T[self._to_optimizer_id(param_names[1])], marker='+', edgecolor='white')
         # Call mpl's magic layouting method (elimates overlap etc.)
         plt.tight_layout()
+        for ax in axes.flatten():
+            # set x,y axis bounds
+            ax.set_xlim(x_bounds[0] - offset_x, x_bounds[1] + offset_x)
+            ax.set_ylim(y_bounds[0] - offset_y, y_bounds[1] + offset_y)
         # save and close
         path = os.path.join(self._params['plots_directory'], plot_name)
         fig.savefig(path) # Save an image of the 3d plot (which, of course, only shows one specific projection)
@@ -586,8 +589,9 @@ class ExperimentCoordinator(object):
         # Get data from the GPR
         RESOLUTION = 50
         predictionspace = self._get_prediction_space(param_names, RESOLUTION)
-        mean, sigma = self.optimizer.gp.predict(predictionspace, return_std=True)
-        filtered_X, filtered_Y = self._get_filtered_observations(param_names)
+        norm_predictionspace = self._get_prediction_space(param_names, RESOLUTION, normalized=self._params['normalize'])
+        mean, sigma = self.optimizer.gp.predict(norm_predictionspace, return_std=True)
+        filtered_X, filtered_Y = self._get_filtered_observations(param_names, normalization = self._params['normalize'])
         ax_3d.scatter(xs = filtered_X.T[self._to_optimizer_id(param_names[0])],
                       ys = filtered_X.T[self._to_optimizer_id(param_names[1])],
                       zs = filtered_Y, c='blue', label=u'Observations', s=50)
@@ -630,10 +634,11 @@ class ExperimentCoordinator(object):
         self._setup_metric_axis(metric_axis, param_name)
 
         predictionspace = self._get_prediction_space([param_name])
+        norm_predictionspace = self._get_prediction_space([param_name], normalized=self._params['normalize'])
         # Get mean and sigma from the gaussian process
-        y_pred, sigma = self.optimizer.gp.predict(predictionspace, return_std=True)
+        y_pred, sigma = self.optimizer.gp.predict(norm_predictionspace, return_std=True)
         # Plot the observations available to the gaussian process
-        filtered_X, filtered_Y = self._get_filtered_observations((param_name))
+        filtered_X, filtered_Y = self._get_filtered_observations((param_name), normalization = self._params['normalize'])
         metric_axis.plot(filtered_X.T[self._to_optimizer_id(param_name)], filtered_Y, '.', color=colors['green'], markersize=10, label=u'Given Observations $D_n$')
         # Plot the gp's prediction mean
         plotspace = predictionspace[:,self._to_optimizer_id(param_name)]
@@ -663,18 +668,24 @@ class ExperimentCoordinator(object):
         print("\tSaved plot to", path)
         plt.close()
 
-    def _get_prediction_space(self, free_params, RESOLUTION=1000):
+    def _get_prediction_space(self, free_params, RESOLUTION=1000, normalized=False):
         """
         Returns a predictionspace for the gaussian process.
         :param free_params: Parameters which are supposed to vary in the prediction space.
                             For all other dimensions, the respective parameter will only have the value from the default rosparams.
         :param RESOLUTION: The RESOLUTION for the prediction (higher means better quality)
+        :param normalized: Whether to return a normalized prediction space.
+                           This should be used when requesting estimated from a GP that works on a normalized design space.
+                           It'll return a relatively trivial predictionspace that goes from 0 to 1 per dimension.
         """
         predictionspace = np.zeros((len(self.optimizer.keys), np.power(RESOLUTION, len(free_params))))
         for key in [fixed_param for fixed_param in self.optimization_defs.keys() if fixed_param not in free_params]: # Fill all fixed params with the default value
             predictionspace[self._to_optimizer_id(key)] = np.full((1,np.power(RESOLUTION, len(free_params))), self.obj_function.default_params[self._to_rosparam(key)])
         # Handle free params
-        free_param_bounds = [self.obj_function.design_space[self._to_rosparam(key)] for key in free_params]
+        if normalized:
+            free_param_bounds = [(0, 1) for key in free_params]
+        else:
+            free_param_bounds = [self.obj_function.design_space[self._to_rosparam(key)] for key in free_params]
         free_param_spaces = [np.linspace(bounds[0], bounds[1], RESOLUTION) for bounds in free_param_bounds]
         free_param_coordinates = np.meshgrid(*free_param_spaces)
         for i, key in enumerate(free_params):
@@ -699,16 +710,31 @@ class ExperimentCoordinator(object):
         # delete the free parameters from it
         del(fixed_params[self._to_rosparam(free_params_display_names[0])])
         del(fixed_params[self._to_rosparam(free_params_display_names[1])])
-        for params_dict, metric_value, sample in self.obj_function.samples_filtered(fixed_params):
+        for params_dict, metric_value, sample in self.obj_function.samples_filtered(fixed_params, enforce_bounds=True):
             samples_x.append(params_dict[self._to_rosparam(free_params_display_names[0])])
             samples_y.append(params_dict[self._to_rosparam(free_params_display_names[1])])
             samples_z.append(metric_value)
         return samples_x, samples_y, samples_z
 
-    def _get_filtered_observations(self, free_params_display_names):
+    def _get_filtered_observations(self, free_params_display_names, normalization=False):
+        """
+        Returns all observations currently known to the Gaussian Process that have the same parameter values as the 
+        default value for all non-free params.
+        Will return a denormalized X matrix if normalization is true.
+        """
         fixed_params_display_names = [p for p in self.optimization_defs.keys() if not p in free_params_display_names]
         usables = []
-        for i, x in enumerate(self.optimizer.X):
+        optimizer_X = self.optimizer.X.copy()
+        if normalization:
+            # Denormalize optimizer_X, so the values given by the objective function fit
+            for observation in optimizer_X: # iterate over all observations
+                for display_name in self.optimization_defs.keys():
+                    x = observation[self._to_optimizer_id(display_name)]
+                    bounds = self.obj_function.design_space[self._to_rosparam(display_name)]
+                    param_range = bounds[1] - bounds[0]
+                    observation[self._to_optimizer_id(display_name)] = (x * param_range) + bounds[0]
+
+        for i, x in enumerate(optimizer_X):
             # For each sample, check if it's usable:
             usable = True
             for fixed_param in fixed_params_display_names:
@@ -718,7 +744,7 @@ class ExperimentCoordinator(object):
             if usable:
                 usables.append(i)
         # Filters self.optimizer.X with indices in usables along axis 0
-        return np.take(self.optimizer.X, usables, 0), np.take(self.optimizer.Y, usables)
+        return np.take(optimizer_X, usables, 0), np.take(self.optimizer.Y, usables)
 
     def _to_optimizer_id(self, display_name):
         """
