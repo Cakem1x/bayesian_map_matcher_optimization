@@ -17,5 +17,5 @@ setup(name='bayropt',
           'pyyaml',
       ],
       test_suite='nose.collector',
-      test_requires=['nose'],
+      tests_require=['nose'],
       zip_safe=True)
