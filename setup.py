@@ -16,4 +16,6 @@ setup(name='bayropt',
           'bayesian-optimization',
           'pyyaml',
       ],
+      test_suite='nose.collector',
+      test_requires=['nose'],
       zip_safe=True)
