@@ -356,16 +356,13 @@ class ExperimentCoordinator(object):
         """
         Returns a dict with all necessary members for saving the experiment's state.
         """
-        target_space = self.optimizer.space
-        target_space.target_func = None # Remove reference to objective_function module to avoid pickle crash
         state_dict = {'optimizer': {
-                          'space': target_space,
+                          'space': self.optimizer.space,
                           'res': self.optimizer.res
                           },
                       'iteration': self.iteration,
                       'best_samples': self.best_samples,
                       'max_performance_measure': self.max_performance_measure}
-        target_space.target_func = self.obj_function.evaluate # Restore reference to objective function
         return state_dict
 
     def _restore_state(self, state_dict):
@@ -847,7 +844,9 @@ class ExperimentCoordinator(object):
         # increase iteration counter
         self.iteration += 1
         # Dump the experiment's state for later use (e.g. interactive plots)
+        self.optimizer.space.target_func = None # Remove reference to objective_function module to avoid pickle crash
         pickle.dump(self._get_state(), open(os.path.join(self._params['plots_directory'], "experiment_state.pkl"), 'wb'))
+        self.optimizer.space.target_func = self.obj_function.evaluate # Restore reference to objective function
 
     def handle_new_best_parameters(self):
         """
