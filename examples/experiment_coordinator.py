@@ -832,11 +832,12 @@ class ExperimentCoordinator(object):
         self.optimizer.maximize(init_points=init_points, n_iter=n_iter, kappa=kappa if not self.fine_tune else kappa_fine_tuning, **self.gpr_kwargs)
         # Check if we found a new best parameter set
         self.handle_new_best_parameters()
-        # plot this iteration's gpr state in 2d for all optimized parameters
-        self.plot_all_single_param()
-        # plot this iteration's gpr state in 3d for the first two parameters (only if there are more than one parameter)
         display_names = list(self._params['optimization_definitions'].keys())
-        if len(display_names) > 1 and len(display_names) < 4: # don't plot all pairs of parameters when there are more then 4, it'll take too much time.
+        # plot this iteration's gpr state as simple graph, but only if we optimize a single parameter
+        if len(display_names) < 2:
+            self.plot_all_single_param()
+        # plot this iteration's gpr state as 3d plot and as contour plot, but only if we optimize exactly two params
+        if len(display_names) == 2:
             self.plot_all_two_params()
         self.output_sampled_params_table() # output a markdown table with all sampled params
         if len(display_names) > 2:
