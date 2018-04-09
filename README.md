@@ -2,7 +2,7 @@ Bayropt
 =======
 Bayropt (Bayesian Robot Optimization) aims to provide an easily usable framework for blackbox parameter-optimization, using Bayesian optimization.
 The framework is developed with robot perception algorithms as its focus.
-Its first version was created as part of my master's thesis on how to optimize feature-based map matcher algorithms.
+Its first version was created as part of [my master's thesis](http://elib.dlr.de/119013/) on how to optimize feature-based map matcher algorithms.
 
 Dependencies:
 * python3
